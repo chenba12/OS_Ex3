@@ -35,11 +35,9 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
 
 void ipv4TcpServer(pThreadData data);
 
-void ipv4UdpServer(pThreadData data);
-
 void ipv6TcpServer(pThreadData data);
 
-void ipv6UdpServer(pThreadData data);
+void udpServer(pThreadData data, bool ipv4);
 
 void udsDgramServer(pThreadData data);
 
@@ -51,7 +49,7 @@ void pipeFileServer(pThreadData data);
 
 void ipv4TcpClient(pThreadData data);
 
-void ipv4UdpClient(pThreadData data);
+void udpClient(bool ipv4, pThreadData data);
 
 void ipv6TcpClient(pThreadData data);
 
@@ -63,16 +61,19 @@ void udsStreamClient(pThreadData data);
 
 void udsDgramClient(pThreadData data);
 
-void ipv6UdpClient(pThreadData data);
-
 void sendFile(int fd);
 
 void receiveFile(int clientFd);
 
+void sendUdpFile(int sockfd, struct sockaddr *addr, socklen_t addrlen);
+
+void receiveUdpFile(int sockfd, socklen_t addrlen);
+
+void getFileUDPAndSendTime(pThreadData data, int clientfd, socklen_t addrlen);
 
 long getCurrentTime();
 
-void getFileAndSendTime(pThreadData data, int clientfd);
+void getFileTCPAndSendTime(pThreadData data, int clientfd);
 
 int main(int argc, char *argv[]) {
     bool serverOrClient = false;
@@ -266,13 +267,13 @@ void *clientTransfer(void *args) {
             ipv4TcpClient(data);
             break;
         case 2:
-            ipv4UdpClient(data);
+            udpClient(true, data);
             break;
         case 3:
             ipv6TcpClient(data);
             break;
         case 4:
-            ipv6UdpClient(data);
+            udpClient(false, data);
             break;
         case 5:
             udsDgramClient(data);
@@ -290,13 +291,10 @@ void *clientTransfer(void *args) {
             printf("Invalid connection type\n");
             exit(1);
     }
-    pthread_exit(NULL);
-    return NULL;
+    free(data);
+    exit(1);
 }
 
-void ipv6UdpClient(pThreadData data) {
-
-}
 
 void udsDgramClient(pThreadData data) {
 
@@ -340,16 +338,69 @@ void ipv6TcpClient(pThreadData data) {
         perror("connect");
         exit(1);
     }
-
     sendFile(client_socket);
+    // Close the client socket
+    close(client_socket);
+}
+
+void udpClient(bool ipv4, pThreadData data) {
+    struct sockaddr_in6 server_addr;
+    struct sockaddr_in server_addr_ipv4;
+    struct sockaddr *addr;
+    socklen_t addrlen;
+
+    // Create a socket for the client
+    int client_socket;
+    if (ipv4) {
+        client_socket = socket(AF_INET, SOCK_DGRAM, 0);
+        if (client_socket == -1) {
+            perror("socket");
+            exit(1);
+        }
+
+        // Fill in the server's address and port number
+        memset(&server_addr_ipv4, '0', sizeof(server_addr_ipv4));
+        server_addr_ipv4.sin_family = AF_INET;
+        server_addr_ipv4.sin_port = htons(data->port);
+
+        // Convert IPv4 and IPv6 addresses from text to binary form
+        if (inet_pton(AF_INET, "127.0.0.1", &server_addr_ipv4.sin_addr) <= 0) {
+            perror("inet_pton");
+            exit(1);
+        }
+
+        addr = (struct sockaddr *) &server_addr_ipv4;
+        addrlen = sizeof(server_addr_ipv4);
+    } else {
+        client_socket = socket(AF_INET6, SOCK_DGRAM, 0);
+        if (client_socket == -1) {
+            perror("socket");
+            exit(1);
+        }
+
+        // Fill in the server's address and port number
+        memset(&server_addr, '0', sizeof(server_addr));
+        server_addr.sin6_family = AF_INET6;
+        server_addr.sin6_port = htons(data->port);
+
+        // Convert IPv4 and IPv6 addresses from text to binary form
+        if (inet_pton(AF_INET6, "::1", &server_addr.sin6_addr) <= 0) {
+            perror("inet_pton");
+            exit(1);
+        }
+
+        addr = (struct sockaddr *) &server_addr;
+        addrlen = sizeof(server_addr);
+    }
+
+    // Send the file
+    int t = sendto(client_socket, "buffer", strlen("buffer") + 1, 0, addr, addrlen);
+    printf("sent %d", t);
+    sendUdpFile(client_socket, addr, addrlen);
 
     // Close the client socket
     free(data);
     close(client_socket);
-}
-
-void ipv4UdpClient(pThreadData data) {
-
 }
 
 void ipv4TcpClient(pThreadData data) {
@@ -402,26 +453,45 @@ void sendFile(int fd) {// Send the file
     fclose(fp);
 }
 
+void sendUdpFile(int sockfd, struct sockaddr *addr, socklen_t addrlen) {
+    // Send the file
+    FILE *fp = fopen("file", "rb");
+    if (fp == NULL) {
+        perror("fopen");
+        exit(1);
+    }
+    char buffer[10000];
+    size_t bytes_read;
+    size_t bytes_sent;
+    size_t sum = 0;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+
+        if ((bytes_sent = sendto(sockfd, buffer, bytes_read, 0, addr, addrlen)) == -1) {
+            perror("sendto");
+            exit(1);
+        }
+        sum += bytes_sent;
+        //fail transfer fails if sent too much at once
+        usleep(10);
+    }
+    fclose(fp);
+}
+
 void *serverTransfer(void *args) {
     pThreadData data = (ThreadData *) args;
-
-
     int connectionType = checkConnection(data->testType, data->testParam);
-    //TODO remove
-    printf("%s\n", data->testType);
-    printf("%s\n", data->testParam);
     switch (connectionType) {
         case 1:
             ipv4TcpServer(data);
             break;
         case 2:
-            ipv4UdpServer(data);
+            udpServer(data, true);
             break;
         case 3:
             ipv6TcpServer(data);
             break;
         case 4:
-            ipv6UdpServer(data);
+            udpServer(data, false);
             break;
         case 5:
             udsDgramServer(data);
@@ -439,6 +509,7 @@ void *serverTransfer(void *args) {
             printf("Invalid connection type\n");
             exit(1);
     }
+    free(data);
     exit(1);
 }
 
@@ -458,8 +529,59 @@ void udsDgramServer(pThreadData data) {
 
 }
 
-void ipv6UdpServer(pThreadData data) {
+void udpServer(pThreadData data, bool ipv4) {
+    int serverSocket;
+    if (ipv4) {
+        serverSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    } else {
+        serverSocket = socket(AF_INET6, SOCK_DGRAM, 0);
+    }
 
+    if (serverSocket == -1) {
+        perror("socket");
+        exit(1);
+    }
+
+    int optval = 1;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
+        perror("setsockopt");
+        exit(1);
+    }
+
+    struct sockaddr_storage server_addr;
+    socklen_t addrlen;
+    if (ipv4) {
+        struct sockaddr_in *s = (struct sockaddr_in *) &server_addr;
+        memset(s, 0, sizeof(*s));
+        s->sin_family = AF_INET;
+        s->sin_addr.s_addr = htonl(INADDR_ANY);
+        s->sin_port = htons(data->port);
+        addrlen = sizeof(*s);
+    } else {
+        struct sockaddr_in6 *s = (struct sockaddr_in6 *) &server_addr;
+        memset(s, 0, sizeof(*s));
+        s->sin6_family = AF_INET6;
+        s->sin6_addr = in6addr_any;
+        s->sin6_port = htons(data->port);
+        addrlen = sizeof(*s);
+    }
+
+    if (bind(serverSocket, (struct sockaddr *) &server_addr, addrlen) == -1) {
+        perror("bind");
+        exit(1);
+    }
+
+    // Modify the string
+    char readyStr[200];
+    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
+
+    // Send the string over the socket
+    send(data->socket, readyStr, strlen(readyStr), 0);
+    while (1) {
+        getFileUDPAndSendTime(data, serverSocket, addrlen);
+        break;
+    }
+    close(serverSocket);
 }
 
 void ipv6TcpServer(pThreadData data) {
@@ -512,7 +634,7 @@ void ipv6TcpServer(pThreadData data) {
         }
         // Receive the file
         // Example usage to measure elapsed time
-        getFileAndSendTime(data, clientfd);
+        getFileTCPAndSendTime(data, clientfd);
         close(clientfd);
         break;
     }
@@ -521,9 +643,6 @@ void ipv6TcpServer(pThreadData data) {
     close(ipv6tcpSocket);
 }
 
-void ipv4UdpServer(pThreadData data) {
-
-}
 
 void ipv4TcpServer(pThreadData data) {// Open a new TCP socket
     int ipv4tcpSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -572,9 +691,7 @@ void ipv4TcpServer(pThreadData data) {// Open a new TCP socket
             perror("accept");
             continue;
         }
-        // Receive the file
-        // Example usage to measure elapsed time
-        getFileAndSendTime(data, clientfd);
+        getFileTCPAndSendTime(data, clientfd);
         close(clientfd);
         break;
     }
@@ -582,7 +699,7 @@ void ipv4TcpServer(pThreadData data) {// Open a new TCP socket
     close(ipv4tcpSocket);
 }
 
-void getFileAndSendTime(pThreadData data, int clientfd) {
+void getFileTCPAndSendTime(pThreadData data, int clientfd) {
     long startTime = getCurrentTime();
     receiveFile(clientfd);
     long endTime = getCurrentTime();
@@ -592,6 +709,7 @@ void getFileAndSendTime(pThreadData data, int clientfd) {
     printf("%s", elapsedStr);
     send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
+
 
 void receiveFile(int clientFd) {
     FILE *fp = fopen("received_file", "wb");
@@ -614,6 +732,47 @@ void receiveFile(int clientFd) {
     fclose(fp);
 }
 
+void getFileUDPAndSendTime(pThreadData data, int clientfd, socklen_t addrlen) {
+    long startTime = getCurrentTime();
+    receiveUdpFile(clientfd, addrlen);
+    long endTime = getCurrentTime();
+    long elapsedTime = endTime - startTime;
+    char elapsedStr[200];
+    snprintf(elapsedStr, sizeof(elapsedStr), "%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
+    printf("%s", elapsedStr);
+    send(data->socket, elapsedStr, strlen(elapsedStr), 0);
+}
+
+void receiveUdpFile(int sockfd, socklen_t addrlen) {
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+    FILE *fp = fopen("received_file", "wb");
+    if (fp == NULL) {
+        perror("fopen");
+        exit(1);
+    }
+    char buffer[10000] = {0};
+    size_t bytes_read;
+    bool stop_loop = false;
+    size_t total_bytes_read = 0;
+    while (!stop_loop && (bytes_read = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *) &client_addr,
+                                                &client_addr_len)) > 0) {
+        if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
+            perror("fwrite");
+            exit(1);
+        }
+        total_bytes_read += bytes_read;
+        if (total_bytes_read >= 100 * 1024 * 1024 || total_bytes_read == 104783872) {
+            stop_loop = true;
+        }
+    }
+    if (bytes_read == -1) {
+        perror("recvfrom");
+        exit(1);
+    }
+    fclose(fp);
+}
+
 void
 startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode) {
     bool firstMessage = true;
@@ -626,15 +785,16 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
     fcntl(socket, F_SETFL, flags | O_NONBLOCK);
 
     if (clientOrServer == false && testMode == true) {
+
         if (testType != NULL && testParam != NULL) {
             snprintf(sendbuf, sizeof(sendbuf), "%s %s\n", testType, testParam);
-        }
-        int numbytes = send(socket, sendbuf, strlen(sendbuf), 0);
-        if (numbytes == -1) {
-            perror("send");
-            exit(1);
-        } else {
-            memset(sendbuf, 0, sizeof(sendbuf));
+            int bytesSent = send(socket, sendbuf, strlen(sendbuf), 0);
+            if (bytesSent == -1) {
+                perror("send");
+                exit(1);
+            } else {
+                memset(sendbuf, 0, sizeof(sendbuf));
+            }
         }
     }
 
@@ -653,7 +813,6 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
             perror("select");
             exit(1);
         }
-
         // Handle socket readiness for reading
         if (FD_ISSET(socket, &readfds)) {
             int numbytes = recv(socket, recvbuf, sizeof(recvbuf), 0);
@@ -665,6 +824,7 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 printf("Connection closed by remote host\n");
                 exit(0);
             } else if (numbytes > 0) {
+
                 // Process the received data
                 recvbuf[numbytes] = '\0';
                 if (!quiteMode) {
