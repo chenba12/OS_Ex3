@@ -19,7 +19,6 @@ void errorMessage();
 typedef struct {
     char *testParam;
     char *testType;
-    char *str;
     int socket;
     long port;
 } ThreadData, *pThreadData;
@@ -258,7 +257,6 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
 
 void *clientTransfer(void *args) {
     pThreadData data = (ThreadData *) args;
-    printf("hefkhjdwsklfjsd\n");
     if (data->testType == NULL) {
         printf("sad\n");
     }
@@ -292,6 +290,8 @@ void *clientTransfer(void *args) {
             printf("Invalid connection type\n");
             exit(1);
     }
+    pthread_exit(NULL);
+    return NULL;
 }
 
 void ipv6UdpClient(pThreadData data) {
@@ -315,7 +315,37 @@ void pipeFileClient(pThreadData data) {
 }
 
 void ipv6TcpClient(pThreadData data) {
+    struct sockaddr_in6 serv_addr;
 
+    // Create a socket for the client
+    int client_socket = socket(AF_INET6, SOCK_STREAM, 0);
+    if (client_socket == -1) {
+        perror("socket");
+        exit(1);
+    }
+
+    // Fill in the server's address and port number
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serv_addr.sin6_family = AF_INET6;
+    serv_addr.sin6_port = htons(data->port);
+
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if (inet_pton(AF_INET6, "::1", &serv_addr.sin6_addr) <= 0) {
+        perror("inet_pton");
+        exit(1);
+    }
+
+    // Connect to the server
+    if (connect(client_socket, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+        perror("connect");
+        exit(1);
+    }
+
+    sendFile(client_socket);
+
+    // Close the client socket
+    free(data);
+    close(client_socket);
 }
 
 void ipv4UdpClient(pThreadData data) {
@@ -323,7 +353,6 @@ void ipv4UdpClient(pThreadData data) {
 }
 
 void ipv4TcpClient(pThreadData data) {
-    printf("asdfasdfkjhasdlk\n");
     struct sockaddr_in serv_addr;
 
     // Create a socket for the client
@@ -351,8 +380,8 @@ void ipv4TcpClient(pThreadData data) {
     }
     sendFile(client_socket);
 
-
     // Close the client socket
+    free(data);
     close(client_socket);
 }
 
@@ -370,6 +399,7 @@ void sendFile(int fd) {// Send the file
             exit(1);
         }
     }
+    fclose(fp);
 }
 
 void *serverTransfer(void *args) {
@@ -377,6 +407,7 @@ void *serverTransfer(void *args) {
 
 
     int connectionType = checkConnection(data->testType, data->testParam);
+    //TODO remove
     printf("%s\n", data->testType);
     printf("%s\n", data->testParam);
     switch (connectionType) {
@@ -408,8 +439,7 @@ void *serverTransfer(void *args) {
             printf("Invalid connection type\n");
             exit(1);
     }
-    // Return a NULL pointer to indicate success
-    return NULL;
+    exit(1);
 }
 
 void pipeFileServer(pThreadData data) {
@@ -433,7 +463,62 @@ void ipv6UdpServer(pThreadData data) {
 }
 
 void ipv6TcpServer(pThreadData data) {
+    // Open a new TCP socket
+    int ipv6tcpSocket = socket(AF_INET6, SOCK_STREAM, 0);
+    if (ipv6tcpSocket == -1) {
+        perror("socket");
+        exit(1);
+    }
 
+    // Set the socket options
+    int optval = 1;
+    if (setsockopt(ipv6tcpSocket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
+        perror("setsockopt");
+        exit(1);
+    }
+
+    // Bind the socket to the specified address and port
+    struct sockaddr_in6 addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family = AF_INET6;
+    addr.sin6_addr = in6addr_loopback; // Use loopback address
+    addr.sin6_port = htons(data->port); // Add 1 to the port number
+    if (bind(ipv6tcpSocket, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
+        perror("bind");
+        exit(1);
+    }
+
+    // Listen for incoming connections
+    if (listen(ipv6tcpSocket, 5) == -1) {
+        perror("listen");
+        exit(1);
+    }
+
+    // Modify the string
+    char readyStr[200];
+    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
+
+    // Send the string over the socket
+    send(data->socket, readyStr, strlen(readyStr), 0);
+
+    // Accept incoming connections and handle them in a loop
+    while (1) {
+        struct sockaddr_in6 client_addr;
+        socklen_t addrlen = sizeof(client_addr);
+        int clientfd = accept(ipv6tcpSocket, (struct sockaddr *) &client_addr, &addrlen);
+        if (clientfd == -1) {
+            perror("accept");
+            continue;
+        }
+        // Receive the file
+        // Example usage to measure elapsed time
+        getFileAndSendTime(data, clientfd);
+        close(clientfd);
+        break;
+    }
+
+    // Close the socket
+    close(ipv6tcpSocket);
 }
 
 void ipv4UdpServer(pThreadData data) {
@@ -472,13 +557,12 @@ void ipv4TcpServer(pThreadData data) {// Open a new TCP socket
     }
 
     // Modify the string
-    strcat(data->str, "~~Ready~~!");
+    char readyStr[200];
+    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
 
     // Send the string over the socket
-    send(data->socket, data->str, strlen(data->str), 0);
+    send(data->socket, readyStr, strlen(readyStr), 0);
 
-    // Free the memory allocated for the string
-    free(data->str);
     // Accept incoming connections and handle them in a loop
     while (1) {
         struct sockaddr_in client_addr;
@@ -504,9 +588,9 @@ void getFileAndSendTime(pThreadData data, int clientfd) {
     long endTime = getCurrentTime();
     long elapsedTime = endTime - startTime;
     char elapsedStr[200];
-    snprintf(elapsedStr, sizeof(elapsedStr), "Elapsed time: %ld ms\n", elapsedTime);
-    strcpy(data->str, elapsedStr);
-    send(data->socket, data->str, strlen(data->str), 0);
+    snprintf(elapsedStr, sizeof(elapsedStr), "%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
+    printf("%s", elapsedStr);
+    send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
 
 void receiveFile(int clientFd) {
@@ -591,7 +675,6 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                         pthread_t thread;
                         pThreadData data = malloc(sizeof(ThreadData));
                         memset(recvbuf, 0, sizeof(recvbuf));
-                        data->str = malloc((sizeof(char) * 200));
                         data->socket = socket;
                         data->port = port + 1;
                         data->testParam = testParam;
@@ -623,7 +706,6 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                     pthread_t thread;
                     pThreadData data = malloc(sizeof(ThreadData));
                     memset(recvbuf, 0, sizeof(recvbuf));
-                    data->str = malloc((sizeof(char) * 200));
                     data->socket = socket;
                     data->port = port + 1;
                     data->testParam = testParam;
@@ -658,8 +740,6 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
 
 
 void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam) {
-    printf("server port %ld\n", port);
-    printf("server ip %s\n", ip);
     int clientSocket;
     if ((clientSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         perror("Failed to open a TCP connection");
