@@ -1,6 +1,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 long getCurrentTime() {
     struct timespec ts;
@@ -33,4 +34,15 @@ void errorMessage() {
            "-q flag will enable quiet mode, in which only testing results will be printed.\n");
     printf("-p <type> <param> -p -q are optionals");
     exit(1);
+}
+
+void deleteFile() {
+    const char *filename = "received_file";
+    if (access(filename, F_OK) != -1) {
+        if (remove(filename) == 0) {
+
+        } else {
+            perror("remove");
+        }
+    }
 }

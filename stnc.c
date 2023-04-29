@@ -153,7 +153,7 @@ int checkConnection(char *testType, char *testParam) {
 }
 
 void serverHandler(long port, bool testMode, bool quiteMode) {
-    printf("server port %ld\n", port);
+    deleteFile();
     int serverSocket;
     //Opening a new TCP socket
     if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
@@ -316,7 +316,6 @@ void udsDgramServer(pThreadData data) {
 }
 
 
-
 void
 startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode) {
     bool firstMessage = true;
@@ -368,7 +367,6 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 printf("Connection closed by remote host\n");
                 exit(0);
             } else if (numbytes > 0) {
-
                 // Process the received data
                 recvbuf[numbytes] = '\0';
                 if (!quiteMode) {

@@ -151,9 +151,7 @@ void ipvTcpClient(pThreadData data, int use_ipv4) {
     ssize_t bytes_received;
     while ((bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0)) > 0) {
         buffer[bytes_received] = '\0';
-        printf("this is buffer %s\n", buffer);
         if (strcmp(buffer, "DONE!") == 0) {
-            printf("Hey :D\n");
             break;
         }
     }

@@ -13,4 +13,6 @@ long getPort(long port, char **ptr, const char *host);
 
 void errorMessage();
 
+void deleteFile();
+
 #endif //OS_EX3_UTILS_H

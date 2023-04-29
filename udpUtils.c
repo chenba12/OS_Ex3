@@ -50,15 +50,17 @@ void udpServer(pThreadData data, bool ipv4) {
     }
 
     // Modify the string
-    char readyStr[200];
+    char readyStr[11];
     snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
 
     // Send the string over the socket
     send(data->socket, readyStr, strlen(readyStr), 0);
-    while (1) {
-        getFileUDPAndSendTime(data, serverSocket, addrlen);
-        break;
-    }
+
+    getFileUDPAndSendTime(data, serverSocket, addrlen);
+
+    char done[5];
+    snprintf(done, sizeof(done), "DONE");
+    send(data->socket, done, strlen(done), 0);
     close(serverSocket);
 }
 
@@ -83,17 +85,16 @@ void receiveUdpFile(int sockfd, socklen_t addrlen) {
     }
     char buffer[10000] = {0};
     size_t bytes_read;
-    bool stop_loop = false;
     size_t total_bytes_read = 0;
-    while (!stop_loop && (bytes_read = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *) &client_addr,
-                                                &client_addr_len)) > 0) {
+    while ((bytes_read = recvfrom(sockfd, buffer, sizeof(buffer), 0, (struct sockaddr *) &client_addr,
+                                  &client_addr_len)) > 0) {
         if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
             perror("fwrite");
             exit(1);
         }
         total_bytes_read += bytes_read;
         if (total_bytes_read >= 100 * 1024 * 1024 || total_bytes_read == 104783872) {
-            stop_loop = true;
+            break;
         }
     }
     if (bytes_read == -1) {
@@ -154,12 +155,21 @@ void udpClient(pThreadData data, bool ipv4) {
     }
 
     // Send the file
-    int t = sendto(client_socket, "buffer", strlen("buffer") + 1, 0, addr, addrlen);
-    printf("sent %d", t);
     sendUdpFile(client_socket, addr, addrlen);
-
+    char buffer[5] = {0};
+    ssize_t bytes_received;
+    while ((bytes_received = recv(data->socket, buffer, sizeof(buffer) - 1, 0)) >= -1) {
+        buffer[bytes_received] = '\0';
+        if (strcmp(buffer, "DONE!") == 0) {
+            break;
+        }
+    }
+    if (bytes_received == -1) {
+        perror("recv");
+        exit(1);
+    }
     // Close the client socket
-    free(data);
+//    free(data);
     close(client_socket);
 }
 
