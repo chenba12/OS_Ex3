@@ -81,7 +81,6 @@ void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struc
     } else {
         snprintf(elapsedStr, sizeof(elapsedStr), "%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
     }
-    printf("%s", elapsedStr);
     send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
 

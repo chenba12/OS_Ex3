@@ -170,7 +170,7 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
         perror("Bind failed with error code");
         exit(6);
     }
-    printf("Waiting for incoming TCP-connections...\n");
+    if (!quiteMode)printf("Waiting for incoming TCP-connections...\n");
     struct sockaddr_in clientAddress;  //
     socklen_t clientAddressLen = sizeof(clientAddress);
     while (1) {
@@ -183,7 +183,7 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
             close(serverSocket);
             exit(6);
         }
-        printf("----New client connected----\n");
+        if (!quiteMode)printf("----New client connected----\n");
         fflush(stdin);
         startChat(clientSocket, port, true, testMode, NULL, NULL, quiteMode);
         close(clientSocket);
@@ -193,9 +193,6 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
 
 void *clientTransfer(void *args) {
     pThreadData data = (ThreadData *) args;
-    if (data->testType == NULL) {
-        printf("sad\n");
-    }
     int connectionType = checkConnection(data->testType, data->testParam);
     switch (connectionType) {
         case 1:
@@ -228,7 +225,7 @@ void *clientTransfer(void *args) {
             printf("Invalid connection type\n");
             exit(1);
     }
-//    free(data);
+    free(data);
     exit(1);
 }
 
@@ -317,7 +314,7 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 exit(1);
             } else if (numbytes == 0) {
                 // Connection closed by remote host
-                printf("Connection closed by remote host\n");
+                if (!quiteMode)printf("Connection closed by remote host\n");
                 exit(0);
             } else if (numbytes > 0) {
                 // Process the received data
