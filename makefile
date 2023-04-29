@@ -4,7 +4,7 @@ LDFLAGS=-ldl
 TARGET = stnc
 
 # Source and object files
-SOURCES = stnc.c utils.c tcpUtils.c udpUtils.c
+SOURCES = stnc.c utils.c tcpUtils.c udpUtils.c pipeUtils.c mmapUtils.c udsUtils.c
 OBJECTS = $(SOURCES:.c=.o)
 #used to remove the need for export LD_LIBRARY_PATH=.
 RPATH=-Wl,-rpath=./

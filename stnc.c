@@ -15,32 +15,17 @@
 #include "tcpUtils.h"
 #include "utils.h"
 #include "udpUtils.h"
+#include "udsUtils.h"
+#include "mmapUtils.h"
+#include "pipeUtils.h"
+
 // function signatures
-
-
 void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam);
 
 void serverHandler(long port, bool testMode, bool quiteMode);
 
 void
 startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode);
-
-
-void udsDgramServer(pThreadData data);
-
-void udsStreamServer(pThreadData data);
-
-void mmapFileServer(pThreadData data);
-
-void pipeFileServer(pThreadData data);
-
-void pipeFileClient(pThreadData data);
-
-void mmapFileClient(pThreadData data);
-
-void udsStreamClient(pThreadData data);
-
-void udsDgramClient(pThreadData data);
 
 
 int main(int argc, char *argv[]) {
@@ -141,7 +126,7 @@ int checkConnection(char *testType, char *testParam) {
     } else if (strcmp(testType, "uds") == 0) {
         if (strcmp(testParam, "dgram") == 0) {
             result = 5;
-        } else if (strcmp(testParam, "stream") == 0) {
+        } else if (strcmp(testParam, "stream\n") == 0 || strcmp(testParam, "stream") == 0) {
             result = 6;
         }
     } else if (strcmp(testType, "mmap") == 0) {
@@ -226,10 +211,12 @@ void *clientTransfer(void *args) {
             udpClient(data, false);
             break;
         case 5:
-            udsDgramClient(data);
+            //gram
+            udsClient(data, true);
             break;
         case 6:
-            udsStreamClient(data);
+            //stream
+            udsClient(data, false);
             break;
         case 7:
             mmapFileClient(data);
@@ -244,24 +231,6 @@ void *clientTransfer(void *args) {
 //    free(data);
     exit(1);
 }
-
-
-void udsDgramClient(pThreadData data) {
-
-}
-
-void udsStreamClient(pThreadData data) {
-
-}
-
-void mmapFileClient(pThreadData data) {
-
-}
-
-void pipeFileClient(pThreadData data) {
-
-}
-
 
 void *serverTransfer(void *args) {
     pThreadData data = (ThreadData *) args;
@@ -280,10 +249,12 @@ void *serverTransfer(void *args) {
             udpServer(data, false);
             break;
         case 5:
-            udsDgramServer(data);
+            //gram
+            udsServer(data, true);
             break;
         case 6:
-            udsStreamServer(data);
+            //stream
+            udsServer(data, false);
             break;
         case 7:
             mmapFileServer(data);
@@ -298,23 +269,6 @@ void *serverTransfer(void *args) {
     free(data);
     exit(1);
 }
-
-void pipeFileServer(pThreadData data) {
-
-}
-
-void mmapFileServer(pThreadData data) {
-
-}
-
-void udsStreamServer(pThreadData data) {
-
-}
-
-void udsDgramServer(pThreadData data) {
-
-}
-
 
 void
 startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode) {
@@ -340,7 +294,6 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
             }
         }
     }
-
     while (1) {
         // Set up the read and write file descriptor sets
         FD_ZERO(&readfds);

@@ -5,10 +5,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include "tcpUtils.h"
 
 
-void ipvTcpServer(pThreadData data, int use_ipv4) {
+void ipvTcpServer(pThreadData data, bool use_ipv4) {
     int domain = use_ipv4 ? AF_INET : AF_INET6;
     int server_socket = socket(domain, SOCK_STREAM, 0);
     if (server_socket == -1) {
@@ -71,7 +72,7 @@ void ipvTcpServer(pThreadData data, int use_ipv4) {
     close(server_socket);
 }
 
-void getFileTCPAndSendTime(pThreadData data, int clientFD) {
+void getFileTCPAndSendTime(pThreadData data, bool clientFD) {
     long startTime = getCurrentTime();
     receiveTCPFile(clientFD);
     long endTime = getCurrentTime();
