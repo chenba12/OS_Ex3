@@ -1,14 +1,21 @@
-CC=gcc
-CFLAGS=-Wall -Wextra
+CFLAGS=-Wall -Wextra -O2
 LDFLAGS=-ldl
+# Executable name
+TARGET = stnc
 
+# Source and object files
+SOURCES = stnc.c utils.c tcpUtils.c udpUtils.c
+OBJECTS = $(SOURCES:.c=.o)
 #used to remove the need for export LD_LIBRARY_PATH=.
 RPATH=-Wl,-rpath=./
 
-all: stnc
+all: $(TARGET)
 
-stnc: stnc.c
-	$(CC) stnc.c -o stnc
+$(TARGET): $(OBJECTS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJECTS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f *.o stnc
+	rm -f $(OBJECTS) $(TARGET)
