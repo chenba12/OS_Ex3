@@ -184,7 +184,6 @@ void sendUdpFile(int sockfd, struct sockaddr *addr, socklen_t addrlen) {
     size_t bytes_sent;
     size_t sum = 0;
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-
         if ((bytes_sent = sendto(sockfd, buffer, bytes_read, 0, addr, addrlen)) == -1) {
             perror("sendto");
             exit(1);

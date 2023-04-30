@@ -1,6 +1,3 @@
-//
-// Created by chen on 4/25/23.
-//
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -68,6 +65,8 @@ int main(int argc, char *argv[]) {
                 } else if (strcmp(argv[6], "dgram") == 0) {
                     testParam = argv[6];
                 } else if (strcmp(argv[6], "stream") == 0) {
+                    testParam = argv[6];
+                } else if (strcmp(argv[6], "file") == 0) {
                     testParam = argv[6];
                 } else {
                     errorMessage();
@@ -216,7 +215,7 @@ void *clientTransfer(void *args) {
             udsClient(data, false);
             break;
         case 7:
-            mmapFileClient(data);
+            mmapClient(data);
             break;
         case 8:
             pipeFileClient(data);
@@ -254,7 +253,7 @@ void *serverTransfer(void *args) {
             udsServer(data, false);
             break;
         case 7:
-            mmapFileServer(data);
+            mmapServer(data);
             break;
         case 8:
             pipeFileServer(data);

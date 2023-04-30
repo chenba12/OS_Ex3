@@ -2,9 +2,10 @@
 #define OS_EX3_MMAPUTILS_H
 
 #include "utils.h"
+#include "stdio.h"
 
-void mmapFileServer(pThreadData data);
+void mmapServer(pThreadData data);
 
-void mmapFileClient(pThreadData data);
+void mmapClient(pThreadData data);
 
 #endif

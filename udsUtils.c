@@ -168,10 +168,8 @@ void sendUDSFile(int clientFD, bool datagram) {
         perror("fopen");
         exit(1);
     }
-
     char buffer[1024] = {0};
     size_t bytes_read;
-
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
         if (datagram) {
             if (sendto(clientFD, buffer, bytes_read, 0, NULL, 0) == -1) {
