@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 long getCurrentTime() {
     struct timespec ts;
@@ -45,4 +46,21 @@ void deleteFile() {
             perror("remove");
         }
     }
+}
+
+void createFile() {
+    char *filename = "file";
+    int fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    if (fd == -1) {
+        perror("open");
+        exit(1);
+    }
+
+    off_t size = 100 * 1024 * 1024;
+    if (ftruncate(fd, size) == -1) {
+        perror("ftruncate");
+        exit(1);
+    }
+
+    close(fd);
 }

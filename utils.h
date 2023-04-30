@@ -15,4 +15,6 @@ void errorMessage();
 
 void deleteFile();
 
+void createFile();
+
 #endif

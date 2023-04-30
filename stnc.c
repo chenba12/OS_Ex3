@@ -137,6 +137,7 @@ int checkConnection(char *testType, char *testParam) {
 }
 
 void serverHandler(long port, bool testMode, bool quiteMode) {
+    createFile();
     deleteFile();
     int serverSocket;
     //Opening a new TCP socket
