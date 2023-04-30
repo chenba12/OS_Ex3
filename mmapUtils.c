@@ -41,17 +41,22 @@ void mmapServer(pThreadData data) {
     snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
     send(data->socket, readyStr, strlen(readyStr), 0);
 
+
     FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {
         perror("fopen");
         exit(1);
     }
-
+    long startTime = getCurrentTime();
     if (fwrite(addr + sizeof(int), 1, size - sizeof(int), fp) != size - sizeof(int)) {
         perror("fwrite");
         exit(1);
     }
-
+    long endTime = getCurrentTime();
+    long elapsedTime = endTime - startTime;
+    char elapsedStr[200];
+    snprintf(elapsedStr, sizeof(elapsedStr), "%s,%ld\n", data->testType, elapsedTime);
+    printf("%s\n", elapsedStr);
     fclose(fp);
 
     if (munmap(addr, size) == -1) {
@@ -63,8 +68,6 @@ void mmapServer(pThreadData data) {
         perror("shm_unlink");
         exit(1);
     }
-
-    printf("Done!\n");
 }
 
 
