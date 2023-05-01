@@ -17,8 +17,7 @@
 #include "pipeUtils.h"
 
 // function signatures
-void checkFlags(int argc, char *const *argv, long port, char **ptr, char *host, char *ip, bool testMode, char *testType,
-                char *testParam, bool quiteMode);
+void checkFlags(int argc, char *const *argv);
 
 void serverHandler(long port, bool testMode, bool quiteMode);
 
@@ -35,29 +34,32 @@ void *serverTransfer(void *args);
 void *clientTransfer(void *args);
 
 int main(int argc, char *argv[]) {
+
+
+    checkFlags(argc, argv);
+    return 0;
+}
+
+/**
+ * check which flags are active
+ * @param argc number of flags
+ * @param argv array containing the flags
+ */
+void checkFlags(int argc, char *const *argv) {
     long port = 0;
     char *ptr;
     char *host = NULL;
     char *ip = NULL;
     bool testMode = false;
-    // ipv4,ipv6,mmap,pipe,uds are in argv[5]
     char *testType = NULL;
-    // udp/tcp or dgram/stream are in argv[6]
     char *testParam = NULL;
     bool quiteMode = false;
-
-    checkFlags(argc, argv, port, &ptr, host, ip, testMode, testType, testParam, quiteMode);
-    return 0;
-}
-
-void checkFlags(int argc, char *const *argv, long port, char **ptr, char *host, char *ip, bool testMode, char *testType,
-                char *testParam, bool quiteMode) {
     if (argc >= 3 && argc <= 7) {
         int result = strcmp(argv[1], "-c");
         if (result == 0) {
             ip = argv[2];
             host = argv[3];
-            port = getPort(port, ptr, host);
+            port = getPort(port, &ptr, host);
             if (argc == 7) {
                 if (strcmp(argv[4], "-p") == 0) {
                     testMode = true;
@@ -92,7 +94,7 @@ void checkFlags(int argc, char *const *argv, long port, char **ptr, char *host, 
             result = strcmp(argv[1], "-s");
             if (result == 0) {
                 host = argv[2];
-                port = getPort(port, ptr, host);
+                port = getPort(port, &ptr, host);
                 if (argc >= 4) {
                     if (strcmp(argv[3], "-p") == 0) {
                         testMode = true;
@@ -113,16 +115,20 @@ void checkFlags(int argc, char *const *argv, long port, char **ptr, char *host, 
     }
 }
 
+/**
+ * Start up a tcp server socket and launch the chat
+ * @param port number
+ * @param testMode if -p flag is active or not
+ * @param quiteMode if -q flag is active or not
+ */
 void serverHandler(long port, bool testMode, bool quiteMode) {
     createFile();
     deleteFile();
     int serverSocket;
-    //Opening a new TCP socket
     if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         perror("Failed to open a TCP connection");
         exit(3);
     }
-    //Enabling reuse of the port
     int enableReuse = 1;
     int ret = setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &enableReuse, sizeof(int));
     if (ret < 0) {
@@ -134,15 +140,13 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
     serverAddress.sin_port = htons(port);
-    //bind() associates the socket with its local address 127.0.0.1
     int bindResult = bind(serverSocket, (struct sockaddr *) &serverAddress, sizeof(serverAddress));
     if (bindResult == -1) {
         perror("Bind failed with error code");
         close(serverSocket);
         exit(5);
     }
-    //Preparing to accept new in coming requests
-    int listenResult = listen(serverSocket, 10);
+    int listenResult = listen(serverSocket, 1);
     if (listenResult == -1) {
         perror("Bind failed with error code");
         exit(6);
@@ -153,7 +157,6 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
     while (1) {
         memset(&clientAddress, 0, sizeof(clientAddress));
         clientAddressLen = sizeof(clientAddress);
-        //Accepting a new client connection
         int clientSocket = accept(serverSocket, (struct sockaddr *) &clientAddress, &clientAddressLen);
         if (clientSocket == -1) {
             perror("listen failed with error code");
@@ -169,6 +172,14 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
     close(serverSocket);
 }
 
+/**
+ * start up a tcp client and launch the chat
+ * @param ip the tcp server ip
+ * @param port number
+ * @param testMode if -p flag is active or not
+ * @param testType ipv4/ipv6/uds/mmap/pipe
+ * @param testParam tcp/udp/dgram/stream/filename
+ */
 void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam) {
     int clientSocket;
     if ((clientSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
@@ -194,6 +205,17 @@ void clientHandler(char *ip, long port, bool testMode, char *testType, char *tes
     startChat(clientSocket, port, false, testMode, testType, testParam, false);
 }
 
+/**
+ * This is the chat logic
+ * using select() enable communicating between a client and a server
+ * @param socket the client/server socket
+ * @param port number
+ * @param clientOrServer true server for false for client
+ * @param testMode if -p flag is active or not
+ * @param testType ipv4/ipv6/uds/mmap/pipe
+ * @param testParam tcp/udp/dgram/stream/filename
+ * @param quiteMode if -q flag is active or not
+ */
 void
 startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode) {
     bool firstMessage = true;
@@ -240,15 +262,15 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 perror("recv");
                 exit(1);
             } else if (bytesRead == 0) {
-                // Connection closed by remote host
                 if (!quiteMode)printf("Connection closed by remote host\n");
                 exit(0);
             } else if (bytesRead > 0) {
-                // Process the received data
                 recvBuffer[bytesRead] = '\0';
                 if (!quiteMode) {
                     printf("Received message: %s\n", recvBuffer);
                 }
+                // if the client got a ready message from the client it can
+                // launch its own thread that handle the communication in -p mode
                 if (!clientOrServer && testMode && firstMessage) {
                     if (strcmp(recvBuffer, "~~Ready~~!") == 0) {
                         pthread_t thread;
@@ -266,20 +288,21 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                     }
                     firstMessage = false;
                 }
+                //launch a new thread that handles the server communication type
                 if (clientOrServer && testMode && firstMessage) {
+                    // testType and testParam are sent with " " (space) between them
                     char *token = strtok(recvBuffer, " ");
                     if (token != NULL) {
-                        free(testType); // free previous allocation
+                        free(testType);
                         testType = strdup(token);
-
                     }
                     token = strtok(NULL, " ");
                     if (token != NULL) {
-                        free(testParam); // free previous allocation
+                        free(testParam);
                         testParam = strdup(token);
                         size_t len = strlen(testType);
                         if (len > 0 && !islower(testParam[len - 1]) && isascii(testParam[len - 1])) {
-                            testParam[len - 1] = '\0'; // remove the last character
+                            testParam[len - 1] = '\0';
                         }
                     }
                     pthread_t thread;
@@ -305,28 +328,24 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 perror("send");
                 exit(1);
             } else {
-                // Clear the send buffer after sending data
                 memset(sendBuffer, 0, sizeof(sendBuffer));
             }
         }
 
         if (FD_ISSET(STDIN_FILENO, &readFDs)) {
             fgets(sendBuffer, sizeof(sendBuffer), stdin);
-            sendBuffer[strcspn(sendBuffer, "\n")] = '\0'; // Remove trailing newline
+            sendBuffer[strcspn(sendBuffer, "\n")] = '\0';
         }
     }
 }
 
-
-//1: IPv4 TCP
-//2: IPv4 UDP
-//3: IPv6 TCP
-//4: IPv6 UDP
-//5: UDS datagram
-//6: UDS stream
-//7: Memory-mapped file
-//8: Pipe
-//0: Otherwise
+/**
+ * check what combination of testType and testParam the program got
+ * @param testType ipv4/ipv6/uds/mmap/pipe
+ * @param testParam tcp/udp/dgram/stream/filename
+ * @return ipv4,tcp=1 ipv4,udp=2 ipv6,tcp=3,ipv6,udp=4
+ * uds,dgram=5 uds,stream=6 mmap,filename=7 pipe,filename=8
+ */
 int checkConnection(char *testType, char *testParam) {
     int result = 0;
     if (strcmp(testType, "ipv4") == 0) {
@@ -355,9 +374,14 @@ int checkConnection(char *testType, char *testParam) {
     return result;
 }
 
-
+/**
+ * this is a method that is used by another thread
+ * launch the right method depending on the checkConnection return value for a client
+ * @param args pThreadData
+ * @return nothing
+ */
 void *clientTransfer(void *args) {
-    pThreadData data = (ThreadData *) args;
+    pThreadData data = (pThreadData) args;
     int connectionType = checkConnection(data->testType, data->testParam);
     switch (connectionType) {
         case 1:
@@ -394,8 +418,14 @@ void *clientTransfer(void *args) {
     exit(1);
 }
 
+/**
+ * this is a method that is used by another thread
+ * launch the right method depending on the checkConnection return value for a server
+ * @param args pThreadData
+ * @return nothing
+ */
 void *serverTransfer(void *args) {
-    pThreadData data = (ThreadData *) args;
+    pThreadData data = (pThreadData) args;
     int connectionType = checkConnection(data->testType, data->testParam);
     switch (connectionType) {
         case 1:
