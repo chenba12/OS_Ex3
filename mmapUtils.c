@@ -8,7 +8,12 @@
 #include <string.h>
 #include <sys/stat.h>
 
-
+/**
+ * this is the mmap server method
+ * opens a mmap called my_shm(100MB) and then receive the data
+ * from the client and writes it to a file called received_file
+ * @param data struct passed from the main thread
+ */
 void mmapServer(pThreadData data) {
     const char *shm_name = "/my_shm";
     int shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
@@ -17,14 +22,13 @@ void mmapServer(pThreadData data) {
         exit(1);
     }
 
-    // Set the size of the shared memory segment
+    // Set the size of the shared memory segment (100MB)
     off_t size = 100 * 1024 * 1024;
     if (ftruncate(shm_fd, size) == -1) {
         perror("ftruncate");
         exit(1);
     }
 
-    // Map the shared memory segment into memory
     void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (addr == MAP_FAILED) {
         perror("mmap");
@@ -66,7 +70,11 @@ void mmapServer(pThreadData data) {
     }
 }
 
-
+/**
+ * open the file the user entered (data->testParam)
+ * and send its data over the mmap
+ * @param data struct passed from the main thread
+ */
 void mmapClient(pThreadData data) {
     int fd = open(data->testParam, O_RDONLY);
     if (fd == -1) {
