@@ -49,12 +49,7 @@ void udpServer(pThreadData data, bool ipv4) {
         exit(1);
     }
 
-    // Modify the string
-    char readyStr[11];
-    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
-
-    // Send the string over the socket
-    send(data->socket, readyStr, strlen(readyStr), 0);
+    send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
 
     getFileUDPAndSendTime(data, serverSocket);
 

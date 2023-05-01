@@ -8,15 +8,11 @@
 #include "pipeUtils.h"
 
 void pipeServer(pThreadData data) {
-    printf("hey\n");
     int pipe_fd;
     unsigned long bytes_read, bytes_written;
     char *filename = "file_received";
-    char readyStr[11];
-    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
-    send(data->socket, readyStr, strlen(readyStr), 0);
-    // Open the pipe for reading
-
+    send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
+    // Open the pipe for reading and create the pipe if it doesn't exist
     pipe_fd = open("/tmp/my_pipe", O_RDONLY | O_CREAT, 0666);
     if (pipe_fd == -1) {
         perror("open");
@@ -57,9 +53,6 @@ void pipeClient(pThreadData data) {
     int pipe_fd;
     unsigned long bytes_read, bytes_written;
     char buffer[1024] = {0};
-
-    // Create the named pipe
-    mkfifo("/tmp/my_pipe", 0666);
 
     // Open the pipe for writing
     pipe_fd = open("/tmp/my_pipe", O_WRONLY);

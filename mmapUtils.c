@@ -17,14 +17,14 @@ void mmapServer(pThreadData data) {
         exit(1);
     }
 
-// Set the size of the shared memory segment
+    // Set the size of the shared memory segment
     off_t size = 100 * 1024 * 1024;
     if (ftruncate(shm_fd, size) == -1) {
         perror("ftruncate");
         exit(1);
     }
 
-// Map the shared memory segment into memory
+    // Map the shared memory segment into memory
     void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (addr == MAP_FAILED) {
         perror("mmap");
@@ -36,11 +36,7 @@ void mmapServer(pThreadData data) {
         perror("fstat");
         exit(1);
     }
-
-    char readyStr[11];
-    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
-    send(data->socket, readyStr, strlen(readyStr), 0);
-
+    send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
 
     FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {

@@ -50,9 +50,7 @@ void ipvTcpServer(pThreadData data, bool use_ipv4) {
         exit(1);
     }
 
-    char readyStr[11];
-    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
-    send(data->socket, readyStr, strlen(readyStr), 0);
+    send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
 
     while (1) {
         struct sockaddr_storage client_addr;

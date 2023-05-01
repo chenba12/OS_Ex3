@@ -33,9 +33,7 @@ void udsServer(pThreadData data, bool datagram) {
         }
     }
 
-    char readyStr[11];
-    snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
-    send(data->socket, readyStr, strlen(readyStr), 0);
+    send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
 
     while (1) {
         if (datagram) {

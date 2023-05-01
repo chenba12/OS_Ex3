@@ -1,5 +1,8 @@
 #ifndef OS_EX3_UTILS_H
 #define OS_EX3_UTILS_H
+/**
+ * a struct used to pass data to the thread
+ */
 typedef struct {
     char *testParam;
     char *testType;

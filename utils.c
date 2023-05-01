@@ -4,12 +4,23 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+/**
+ * get current time in milliseconds
+ * @return time in milliseconds
+ */
 long getCurrentTime() {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+/**
+ * change port string to number
+ * @param port
+ * @param ptr
+ * @param host
+ * @return port
+ */
 long getPort(long port, char **ptr, const char *host) {
     port = strtol(host, ptr, 10);
     if (port == 0) {
@@ -19,7 +30,10 @@ long getPort(long port, char **ptr, const char *host) {
     return port;
 }
 
-
+/**
+ * if the program is missing flags or got wrong flags this message will be printed to the screen
+ *
+ */
 void errorMessage() {
     printf("Error: not enough arguments\n");
     printf("The client side: stnc -c IP PORT -p <type> <param> \n");
@@ -36,7 +50,9 @@ void errorMessage() {
     printf("-p <type> <param> -p -q are optionals");
     exit(1);
 }
-
+/**
+ * delete the received_file at server startup
+ */
 void deleteFile() {
     const char *filename = "received_file";
     if (access(filename, F_OK) != -1) {
@@ -48,6 +64,9 @@ void deleteFile() {
     }
 }
 
+/**
+ * create the 100mb file at server startup
+ */
 void createFile() {
     char *filename = "file";
     int fd = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
@@ -55,12 +74,10 @@ void createFile() {
         perror("open");
         exit(1);
     }
-
     off_t size = 100 * 1024 * 1024;
     if (ftruncate(fd, size) == -1) {
         perror("ftruncate");
         exit(1);
     }
-
     close(fd);
 }
