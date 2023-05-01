@@ -9,7 +9,8 @@
 #include "tcpUtils.h"
 
 /**
- *
+ * opens a tcpserver to receive the data works on both ipv4 and ipv6
+ * write the data into a file named file_received
  * @param data struct to pass data from the main thread
  * @param ipv4 true to use ipv4 false to use ipv6
  */
@@ -75,7 +76,7 @@ void ipvTcpServer(pThreadData data, bool ipv4) {
 }
 
 /**
- *
+ * calculate the time,receive the file and print the results
  * @param data struct to pass data from the main thread
  * @param clientFD
  */
@@ -90,8 +91,8 @@ void getFileTCPAndSendTime(pThreadData data, bool clientFD) {
 }
 
 /**
- *
- * @param clientFD
+ * receive the file and write the data into a file named received_file
+ * @param clientFD the client socket
  */
 void receiveTCPFile(int clientFD) {
     FILE *fp = fopen("received_file", "wb");
@@ -120,7 +121,8 @@ void receiveTCPFile(int clientFD) {
 }
 
 /**
- *
+ * open a tcp connection with the server works with ipv4 and ipv6
+ * waits for a message from the server sayings its done with the transfer
  * @param data struct to pass data from the main thread
  * @param ipv4 true to use ipv4 false to use ipv6
  */
@@ -179,10 +181,10 @@ void ipvTcpClient(pThreadData data, bool ipv4) {
 }
 
 /**
- *
- * @param clientFD
+ * send the 100mb file to the server
+ * @param clientFD the client socket
  */
-void sendTCPFile(int clientFD) {// Send the file
+void sendTCPFile(int clientFD) {
     FILE *fp = fopen("file", "rb");
     if (fp == NULL) {
         perror("fopen");

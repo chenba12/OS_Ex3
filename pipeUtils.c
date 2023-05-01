@@ -74,8 +74,6 @@ void pipeClient(pThreadData data) {
         exit(1);
     }
 
-
-
     // Send the file data through the named pipe
     while ((bytes_read = fread(buffer, 1, 1024, fp)) > 0) {
         bytes_written = write(pipe_fd, buffer, bytes_read);

@@ -8,7 +8,8 @@
 #include "utils.h"
 
 /**
- *
+ * opens a udp server to receive the data works on both ipv4 and ipv6
+ * write the data into a file named file_received
  * @param data struct to pass data from the main thread
  * @param ipv4 true to use ipv4 false to use ipv6
  */
@@ -65,9 +66,9 @@ void udpServer(pThreadData data, bool ipv4) {
 }
 
 /**
- *
+ * calculate the time,receive the file and print the results
  * @param data struct to pass data from the main thread
- * @param clientFD
+ * @param clientFD client socket
  */
 void getFileUDPAndSendTime(pThreadData data, int clientFD) {
     long startTime = getCurrentTime();
@@ -80,10 +81,10 @@ void getFileUDPAndSendTime(pThreadData data, int clientFD) {
 }
 
 /**
- *
- * @param socketFD
+ * receive the file and write the data into a file named received_file
+ * @param clientFD client socket
  */
-void receiveUdpFile(int socketFD) {
+void receiveUdpFile(int clientFD) {
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     FILE *fp = fopen("received_file", "wb");
@@ -94,7 +95,7 @@ void receiveUdpFile(int socketFD) {
     char buffer[10000] = {0};
     size_t bytes_read;
     size_t total_bytes_read = 0;
-    while ((bytes_read = recvfrom(socketFD, buffer, sizeof(buffer), 0, (struct sockaddr *) &client_addr,
+    while ((bytes_read = recvfrom(clientFD, buffer, sizeof(buffer), 0, (struct sockaddr *) &client_addr,
                                   &client_addr_len)) > 0) {
         if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
             perror("fwrite");
@@ -113,7 +114,8 @@ void receiveUdpFile(int socketFD) {
 }
 
 /**
- *
+ * open a tcp connection with the server works with ipv4 and ipv6
+ * waits for a message from the server sayings its done with the transfer
  * @param data struct to pass data from the main thread
  * @param ipv4 true to use ipv4 false to use ipv6
  */
@@ -122,8 +124,6 @@ void udpClient(pThreadData data, bool ipv4) {
     struct sockaddr_in server_addr_ipv4;
     struct sockaddr *addr;
     socklen_t addrLen;
-
-    // Create a socket for the client
     int client_socket;
     if (ipv4) {
         client_socket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -132,12 +132,10 @@ void udpClient(pThreadData data, bool ipv4) {
             exit(1);
         }
 
-        // Fill in the server's address and port number
         memset(&server_addr_ipv4, 0, sizeof(server_addr_ipv4));
         server_addr_ipv4.sin_family = AF_INET;
         server_addr_ipv4.sin_port = htons(data->port);
 
-        // Convert IPv4 and IPv6 addresses from text to binary form
         if (inet_pton(AF_INET, "127.0.0.1", &server_addr_ipv4.sin_addr) <= 0) {
             perror("inet_pton");
             exit(1);
@@ -167,7 +165,6 @@ void udpClient(pThreadData data, bool ipv4) {
         addrLen = sizeof(server_addr);
     }
 
-    // Send the file
     sendUdpFile(client_socket, addr, addrLen);
     char buffer[5] = {0};
     ssize_t bytes_received;
@@ -181,19 +178,16 @@ void udpClient(pThreadData data, bool ipv4) {
         perror("recv");
         exit(1);
     }
-    // Close the client socket
-//    free(data);
     close(client_socket);
 }
 
 /**
- *
- * @param socketFD
- * @param addr
- * @param addrLen
+ * send the 100mb file to the server
+ * @param clientFD the client socket
+ * @param addr sockaddr struct
+ * @param addrLen address length
  */
-void sendUdpFile(int socketFD, struct sockaddr *addr, socklen_t addrLen) {
-    // Send the file
+void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen) {
     FILE *fp = fopen("file", "rb");
     if (fp == NULL) {
         perror("fopen");
@@ -204,7 +198,7 @@ void sendUdpFile(int socketFD, struct sockaddr *addr, socklen_t addrLen) {
     size_t bytes_sent;
     size_t sum = 0;
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-        if ((bytes_sent = sendto(socketFD, buffer, bytes_read, 0, addr, addrLen)) == -1) {
+        if ((bytes_sent = sendto(clientFD, buffer, bytes_read, 0, addr, addrLen)) == -1) {
             perror("sendto");
             exit(1);
         }
