@@ -8,9 +8,13 @@
 #include <stdbool.h>
 #include "tcpUtils.h"
 
-
-void ipvTcpServer(pThreadData data, bool use_ipv4) {
-    int domain = use_ipv4 ? AF_INET : AF_INET6;
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param ipv4 true to use ipv4 false to use ipv6
+ */
+void ipvTcpServer(pThreadData data, bool ipv4) {
+    int domain = ipv4 ? AF_INET : AF_INET6;
     int server_socket = socket(domain, SOCK_STREAM, 0);
     if (server_socket == -1) {
         perror("socket");
@@ -23,7 +27,7 @@ void ipvTcpServer(pThreadData data, bool use_ipv4) {
         exit(1);
     }
 
-    if (use_ipv4) {
+    if (ipv4) {
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
@@ -70,6 +74,11 @@ void ipvTcpServer(pThreadData data, bool use_ipv4) {
     close(server_socket);
 }
 
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param clientFD
+ */
 void getFileTCPAndSendTime(pThreadData data, bool clientFD) {
     long startTime = getCurrentTime();
     receiveTCPFile(clientFD);
@@ -80,7 +89,10 @@ void getFileTCPAndSendTime(pThreadData data, bool clientFD) {
     send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
 
-
+/**
+ *
+ * @param clientFD
+ */
 void receiveTCPFile(int clientFD) {
     FILE *fp = fopen("received_file", "wb");
     if (fp == NULL) {
@@ -107,15 +119,20 @@ void receiveTCPFile(int clientFD) {
     fclose(fp);
 }
 
-void ipvTcpClient(pThreadData data, int use_ipv4) {
-    int domain = use_ipv4 ? AF_INET : AF_INET6;
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param ipv4 true to use ipv4 false to use ipv6
+ */
+void ipvTcpClient(pThreadData data, bool ipv4) {
+    int domain = ipv4 ? AF_INET : AF_INET6;
     int client_socket = socket(domain, SOCK_STREAM, 0);
     if (client_socket == -1) {
         perror("socket");
         exit(1);
     }
 
-    if (use_ipv4) {
+    if (ipv4) {
         struct sockaddr_in serv_addr;
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
@@ -161,6 +178,10 @@ void ipvTcpClient(pThreadData data, int use_ipv4) {
     close(client_socket);
 }
 
+/**
+ *
+ * @param clientFD
+ */
 void sendTCPFile(int clientFD) {// Send the file
     FILE *fp = fopen("file", "rb");
     if (fp == NULL) {

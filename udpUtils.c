@@ -7,6 +7,11 @@
 #include "udpUtils.h"
 #include "utils.h"
 
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param ipv4 true to use ipv4 false to use ipv6
+ */
 void udpServer(pThreadData data, bool ipv4) {
     int serverSocket;
     if (ipv4) {
@@ -59,6 +64,11 @@ void udpServer(pThreadData data, bool ipv4) {
     close(serverSocket);
 }
 
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param clientFD
+ */
 void getFileUDPAndSendTime(pThreadData data, int clientFD) {
     long startTime = getCurrentTime();
     receiveUdpFile(clientFD);
@@ -69,6 +79,10 @@ void getFileUDPAndSendTime(pThreadData data, int clientFD) {
     send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
 
+/**
+ *
+ * @param socketFD
+ */
 void receiveUdpFile(int socketFD) {
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
@@ -98,6 +112,11 @@ void receiveUdpFile(int socketFD) {
     fclose(fp);
 }
 
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param ipv4 true to use ipv4 false to use ipv6
+ */
 void udpClient(pThreadData data, bool ipv4) {
     struct sockaddr_in6 server_addr;
     struct sockaddr_in server_addr_ipv4;
@@ -167,6 +186,12 @@ void udpClient(pThreadData data, bool ipv4) {
     close(client_socket);
 }
 
+/**
+ *
+ * @param socketFD
+ * @param addr
+ * @param addrLen
+ */
 void sendUdpFile(int socketFD, struct sockaddr *addr, socklen_t addrLen) {
     // Send the file
     FILE *fp = fopen("file", "rb");

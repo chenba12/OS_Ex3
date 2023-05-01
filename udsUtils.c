@@ -7,6 +7,11 @@
 
 #include "udsUtils.h"
 
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param datagram true if its datagram false for stream
+ */
 void udsServer(pThreadData data, bool datagram) {
     unlink("/tmp/uds_socket");
     int type = datagram ? SOCK_DGRAM : SOCK_STREAM;
@@ -66,7 +71,14 @@ void udsServer(pThreadData data, bool datagram) {
         exit(1);
     }
 }
-
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param server_fd
+ * @param datagram true if its datagram false for stream
+ * @param client_addr
+ * @param addrLen
+ */
 void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr,
                            socklen_t *addrLen) {
     long startTime = getCurrentTime();
@@ -82,7 +94,14 @@ void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struc
     send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
 
-void receiveUDSFile(int server_fd, bool use_datagram, struct sockaddr_un *client_addr, socklen_t *addrLen) {
+/**
+ *
+ * @param server_fd
+ * @param datagram
+ * @param client_addr
+ * @param addrLen
+ */
+void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrLen) {
     FILE *fp = fopen("received_file", "wb");
     if (fp == NULL) {
         perror("fopen");
@@ -92,7 +111,7 @@ void receiveUDSFile(int server_fd, bool use_datagram, struct sockaddr_un *client
     ssize_t bytes_read;
     size_t total_bytes_read = 0;
 
-    if (use_datagram) {
+    if (datagram) {
         while ((bytes_read = recvfrom(server_fd, buffer, sizeof(buffer), 0, (struct sockaddr *) client_addr, addrLen)) >
                0) {
             if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
@@ -124,6 +143,11 @@ void receiveUDSFile(int server_fd, bool use_datagram, struct sockaddr_un *client
     fclose(fp);
 }
 
+/**
+ *
+ * @param data struct to pass data from the main thread
+ * @param datagram true if its datagram false for stream
+ */
 void udsClient(pThreadData data, bool datagram) {
     int socket_type = datagram ? SOCK_DGRAM : SOCK_STREAM;
     int client_socket = socket(AF_UNIX, socket_type, 0);
@@ -160,6 +184,11 @@ void udsClient(pThreadData data, bool datagram) {
     close(client_socket);
 }
 
+/**
+ *
+ * @param clientFD
+ * @param datagram true if its datagram false for stream
+ */
 void sendUDSFile(int clientFD, bool datagram) {
     FILE *fp = fopen("file", "rb");
     if (fp == NULL) {

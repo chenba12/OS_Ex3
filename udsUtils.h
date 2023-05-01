@@ -11,7 +11,6 @@ void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struc
 
 void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrLen);
 
-
 void udsClient(pThreadData data, bool datagram);
 
 void sendUDSFile(int clientFD, bool datagram);
