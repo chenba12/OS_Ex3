@@ -3,8 +3,8 @@
 
 #include "utils.h"
 
-void pipeFileServer(pThreadData data);
+void pipeServer(pThreadData data);
 
-void pipeFileClient(pThreadData data);
+void pipeClient(pThreadData data);
 
 #endif

@@ -219,7 +219,7 @@ void *clientTransfer(void *args) {
             mmapClient(data);
             break;
         case 8:
-            pipeFileClient(data);
+            pipeClient(data);
             break;
         default:
             printf("Invalid connection type\n");
@@ -257,7 +257,7 @@ void *serverTransfer(void *args) {
             mmapServer(data);
             break;
         case 8:
-            pipeFileServer(data);
+            pipeServer(data);
             break;
         default:
             printf("Invalid connection type\n");
