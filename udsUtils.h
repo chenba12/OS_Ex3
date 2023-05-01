@@ -7,9 +7,9 @@
 void udsServer(pThreadData data, bool datagram);
 
 void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr,
-                           socklen_t *addrlen);
+                           socklen_t *addrLen);
 
-void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrlen);
+void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrLen);
 
 
 void udsClient(pThreadData data, bool datagram);

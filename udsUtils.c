@@ -40,17 +40,17 @@ void udsServer(pThreadData data, bool datagram) {
     while (1) {
         if (datagram) {
             struct sockaddr_un client_addr;
-            socklen_t addrlen = sizeof(client_addr);
-            getFileUDSAndSendTime(data, server_socket, datagram, &client_addr, &addrlen);
+            socklen_t addrLen = sizeof(client_addr);
+            getFileUDSAndSendTime(data, server_socket, datagram, &client_addr, &addrLen);
         } else {
             struct sockaddr_storage client_addr;
-            socklen_t addrlen = sizeof(client_addr);
-            int clientfd = accept(server_socket, (struct sockaddr *) &client_addr, &addrlen);
-            if (clientfd == -1) {
+            socklen_t addrLen = sizeof(client_addr);
+            int clientFD = accept(server_socket, (struct sockaddr *) &client_addr, &addrLen);
+            if (clientFD == -1) {
                 perror("accept");
                 continue;
             }
-            getFileUDSAndSendTime(data, clientfd, datagram, NULL, NULL);
+            getFileUDSAndSendTime(data, clientFD, datagram, NULL, NULL);
 
         }
         break;
@@ -70,9 +70,9 @@ void udsServer(pThreadData data, bool datagram) {
 }
 
 void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr,
-                           socklen_t *addrlen) {
+                           socklen_t *addrLen) {
     long startTime = getCurrentTime();
-    receiveUDSFile(server_fd, datagram, client_addr, addrlen);
+    receiveUDSFile(server_fd, datagram, client_addr, addrLen);
     long endTime = getCurrentTime();
     long elapsedTime = endTime - startTime;
     char elapsedStr[200];
@@ -84,7 +84,7 @@ void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struc
     send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
 
-void receiveUDSFile(int server_fd, bool use_datagram, struct sockaddr_un *client_addr, socklen_t *addrlen) {
+void receiveUDSFile(int server_fd, bool use_datagram, struct sockaddr_un *client_addr, socklen_t *addrLen) {
     FILE *fp = fopen("received_file", "wb");
     if (fp == NULL) {
         perror("fopen");
@@ -95,7 +95,7 @@ void receiveUDSFile(int server_fd, bool use_datagram, struct sockaddr_un *client
     size_t total_bytes_read = 0;
 
     if (use_datagram) {
-        while ((bytes_read = recvfrom(server_fd, buffer, sizeof(buffer), 0, (struct sockaddr *) client_addr, addrlen)) >
+        while ((bytes_read = recvfrom(server_fd, buffer, sizeof(buffer), 0, (struct sockaddr *) client_addr, addrLen)) >
                0) {
             if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
                 perror("fwrite");

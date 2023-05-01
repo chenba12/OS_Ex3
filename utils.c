@@ -13,7 +13,7 @@ long getCurrentTime() {
 long getPort(long port, char **ptr, const char *host) {
     port = strtol(host, ptr, 10);
     if (port == 0) {
-        perror("strtol failed");
+        perror("strtol");
         exit(2);
     }
     return port;

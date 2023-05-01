@@ -10,7 +10,7 @@
 void pipeServer(pThreadData data) {
     printf("hey\n");
     int pipe_fd;
-    ssize_t bytes_read, bytes_written;
+    unsigned long bytes_read, bytes_written;
     char *filename = "file_received";
     char readyStr[11];
     snprintf(readyStr, sizeof(readyStr), "~~Ready~~!");
@@ -55,7 +55,7 @@ void pipeServer(pThreadData data) {
 
 void pipeClient(pThreadData data) {
     int pipe_fd;
-    ssize_t bytes_read, bytes_written;
+    unsigned long bytes_read, bytes_written;
     char buffer[1024] = {0};
 
     // Create the named pipe

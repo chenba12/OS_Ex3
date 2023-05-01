@@ -17,8 +17,8 @@ void ipvTcpServer(pThreadData data, bool use_ipv4) {
         exit(1);
     }
 
-    int optval = 1;
-    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
+    int val = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) == -1) {
         perror("setsockopt");
         exit(1);
     }
@@ -56,17 +56,17 @@ void ipvTcpServer(pThreadData data, bool use_ipv4) {
 
     while (1) {
         struct sockaddr_storage client_addr;
-        socklen_t addrlen = sizeof(client_addr);
-        int clientfd = accept(server_socket, (struct sockaddr *) &client_addr, &addrlen);
-        if (clientfd == -1) {
+        socklen_t addrLen = sizeof(client_addr);
+        int clientFD = accept(server_socket, (struct sockaddr *) &client_addr, &addrLen);
+        if (clientFD == -1) {
             perror("accept");
             continue;
         }
-        getFileTCPAndSendTime(data, clientfd);
+        getFileTCPAndSendTime(data, clientFD);
         char done[5];
         snprintf(done, sizeof(done), "DONE");
         send(data->socket, done, strlen(done), 0);
-        close(clientfd);
+        close(clientFD);
         break;
     }
     close(server_socket);
@@ -119,7 +119,7 @@ void ipvTcpClient(pThreadData data, int use_ipv4) {
 
     if (use_ipv4) {
         struct sockaddr_in serv_addr;
-        memset(&serv_addr, '0', sizeof(serv_addr));
+        memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(data->port);
         if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
@@ -132,7 +132,7 @@ void ipvTcpClient(pThreadData data, int use_ipv4) {
         }
     } else {
         struct sockaddr_in6 serv_addr;
-        memset(&serv_addr, '0', sizeof(serv_addr));
+        memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin6_family = AF_INET6;
         serv_addr.sin6_port = htons(data->port);
         if (inet_pton(AF_INET6, "::1", &serv_addr.sin6_addr) <= 0) {
