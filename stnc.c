@@ -19,13 +19,14 @@
 // function signatures
 void checkFlags(int argc, char *const *argv);
 
-void serverHandler(long port, bool testMode, bool quiteMode);
+void serverHandler(long port, bool testMode, bool quiteMode, char *ip);
 
 void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam);
 
 
 void
-startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode);
+startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode,
+          char *ip);
 
 int checkConnection(char *testType, char *testParam);
 
@@ -105,7 +106,7 @@ void checkFlags(int argc, char *const *argv) {
                         }
                     }
                 }
-                serverHandler(port, testMode, quiteMode);
+                serverHandler(port, testMode, quiteMode, NULL);
             } else {
                 errorMessage();
             }
@@ -121,7 +122,7 @@ void checkFlags(int argc, char *const *argv) {
  * @param testMode if -p flag is active or not
  * @param quiteMode if -q flag is active or not
  */
-void serverHandler(long port, bool testMode, bool quiteMode) {
+void serverHandler(long port, bool testMode, bool quiteMode, char *ip) {
     createFile();
     deleteFile();
     int serverSocket;
@@ -165,7 +166,7 @@ void serverHandler(long port, bool testMode, bool quiteMode) {
         }
         if (!quiteMode)printf("----New client connected----\n");
         fflush(stdin);
-        startChat(clientSocket, port, true, testMode, NULL, NULL, quiteMode);
+        startChat(clientSocket, port, true, testMode, NULL, NULL, quiteMode, ip);
         close(clientSocket);
         break;
     }
@@ -202,7 +203,7 @@ void clientHandler(char *ip, long port, bool testMode, char *testType, char *tes
         close(clientSocket);
         exit(5);
     }
-    startChat(clientSocket, port, false, testMode, testType, testParam, false);
+    startChat(clientSocket, port, false, testMode, testType, testParam, false, ip);
 }
 
 /**
@@ -217,7 +218,8 @@ void clientHandler(char *ip, long port, bool testMode, char *testType, char *tes
  * @param quiteMode if -q flag is active or not
  */
 void
-startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode) {
+startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode,
+          char *ip) {
     bool firstMessage = true;
     fd_set readFDs, writeFDs;
     char sendBuffer[1024] = {0};
@@ -240,6 +242,18 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
             }
         }
     }
+    //sever sending quiteMode
+    if (clientOrServer && testMode && quiteMode) {
+        snprintf(sendBuffer, sizeof(sendBuffer), "true");
+        ssize_t bytesSent = send(socket, sendBuffer, strlen(sendBuffer), 0);
+        if (bytesSent == -1) {
+            perror("send");
+            exit(1);
+        } else {
+            memset(sendBuffer, 0, sizeof(sendBuffer));
+        }
+    }
+    int count = 0;
     while (1) {
         // Set up the read and write file descriptor sets
         FD_ZERO(&readFDs);
@@ -257,6 +271,7 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
         }
         // Handle socket readiness for reading
         if (FD_ISSET(socket, &readFDs)) {
+            count++;
             ssize_t bytesRead = recv(socket, recvBuffer, sizeof(recvBuffer), 0);
             if (bytesRead == -1) {
                 perror("recv");
@@ -266,8 +281,11 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 exit(0);
             } else if (bytesRead > 0) {
                 recvBuffer[bytesRead] = '\0';
-                if (!quiteMode) {
-                    printf("Received message: %s\n", recvBuffer);
+                if (strcmp(recvBuffer, "true") == 0) {
+                    quiteMode = true;
+                }
+                if (!quiteMode || strchr(recvBuffer, ',')) {
+                    printf("%s\n", recvBuffer);
                 }
                 // if the client got a ready message from the client it can
                 // launch its own thread that handle the communication in -p mode
@@ -280,13 +298,16 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                         data->port = port + 1;
                         data->testParam = testParam;
                         data->testType = testType;
+                        data->quiteMode = quiteMode;
+                        data->ip = ip;
+                        data->recvBuff = recvBuffer;
                         int rc = pthread_create(&thread, NULL, clientTransfer, data);
                         if (rc) {
                             printf("ERROR; return code from pthread_create() is %d\n", rc);
                             exit(-1);
                         }
+                        firstMessage = false;
                     }
-                    firstMessage = false;
                 }
                 //launch a new thread that handles the server communication type
                 if (clientOrServer && testMode && firstMessage) {
@@ -312,6 +333,8 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                     data->port = port + 1;
                     data->testParam = testParam;
                     data->testType = testType;
+                    data->quiteMode = quiteMode;
+                    data->recvBuff = recvBuffer;
                     int rc = pthread_create(&thread, NULL, serverTransfer, data);
                     if (rc) {
                         printf("ERROR; return code from pthread_create() is %d\n", rc);

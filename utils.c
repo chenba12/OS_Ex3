@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <openssl/evp.h>
+#include <stdbool.h>
+#include <string.h>
+#include <arpa/inet.h>
 
 /**
  * get current time in milliseconds
@@ -50,6 +54,7 @@ void errorMessage() {
     printf("-p <type> <param> -p -q are optionals");
     exit(1);
 }
+
 /**
  * delete the received_file at server startup
  */
@@ -81,3 +86,64 @@ void createFile() {
     }
     close(fd);
 }
+
+bool verifyChecksum(const char *filePath, const unsigned char *receivedChecksum) {
+    FILE *fp = fopen(filePath, "rb");
+    if (fp == NULL) {
+        perror("fopen");
+        exit(1);
+    }
+
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (mdctx == NULL) {
+        perror("EVP_MD_CTX_new");
+        exit(1);
+    }
+    if (EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL) != 1) {
+        perror("EVP_DigestInit_ex");
+        exit(1);
+    }
+
+    char buffer[1024] = {0};
+    size_t bytes_read;
+
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        if (EVP_DigestUpdate(mdctx, buffer, bytes_read) != 1) {
+            perror("EVP_DigestUpdate");
+            exit(1);
+        }
+    }
+
+    unsigned int checksumLen;
+    unsigned char calculatedChecksum[EVP_MAX_MD_SIZE];
+    if (EVP_DigestFinal_ex(mdctx, calculatedChecksum, &checksumLen) != 1) {
+        perror("EVP_DigestFinal_ex");
+        exit(1);
+    }
+
+    EVP_MD_CTX_free(mdctx);
+    fclose(fp);
+
+    return memcmp(calculatedChecksum, receivedChecksum, checksumLen) == 0;
+}
+
+//void ipv4ToIpv6(const char *ipv4Str, char *ipv6Str) {
+//    struct sockaddr_in ipv4Address;
+//    struct sockaddr_in6 ipv6Address;
+//
+//    memset(&ipv4Address, 0, sizeof(struct sockaddr_in));
+//    ipv4Address.sin_family = AF_INET;
+//    inet_pton(AF_INET, ipv4Str, &(ipv4Address.sin_addr));
+//
+//    // Initialize the IPv6 address structure
+//    memset(&ipv6Address, 0, sizeof(struct sockaddr_in6));
+//    ipv6Address.sin6_family = AF_INET6;
+//
+//    // Convert the IPv4 address to an IPv4-mapped IPv6 address
+//    uint32_t ipv4_part = ipv4Address.sin_addr.s_addr;
+//    uint8_t ipv4_mapped_ipv6[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF};
+//    memcpy(&ipv4_mapped_ipv6[12], &ipv4_part, sizeof(uint32_t));
+//    memcpy(&ipv6Address.sin6_addr, ipv4_mapped_ipv6, sizeof(ipv4_mapped_ipv6));
+//
+//    inet_ntop(AF_INET6, &(ipv6Address.sin6_addr), ipv6Str, INET6_ADDRSTRLEN);
+//}

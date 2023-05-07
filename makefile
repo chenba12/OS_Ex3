@@ -1,5 +1,5 @@
 CFLAGS=-Wall -Wextra -O2
-LDFLAGS=-ldl
+LDFLAGS=-ldl -lcrypto
 TARGET = stnc
 
 SOURCES = stnc.c utils.c tcpUtils.c udpUtils.c pipeUtils.c mmapUtils.c udsUtils.c
@@ -9,7 +9,7 @@ RPATH=-Wl,-rpath=./
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJECTS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJECTS) $(LDFLAGS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

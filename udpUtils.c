@@ -87,7 +87,7 @@ void getFileUDPAndSendTime(pThreadData data, int clientFD) {
 void receiveUdpFile(int clientFD) {
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
-    FILE *fp = fopen("received_file", "wb");
+    FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {
         perror("fopen");
         exit(1);
@@ -136,7 +136,7 @@ void udpClient(pThreadData data, bool ipv4) {
         server_addr_ipv4.sin_family = AF_INET;
         server_addr_ipv4.sin_port = htons(data->port);
 
-        if (inet_pton(AF_INET, "127.0.0.1", &server_addr_ipv4.sin_addr) <= 0) {
+        if (inet_pton(AF_INET, data->ip, &server_addr_ipv4.sin_addr) <= 0) {
             perror("inet_pton");
             exit(1);
         }

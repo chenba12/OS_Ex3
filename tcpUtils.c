@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include "tcpUtils.h"
+#include "utils.h"
+#include <openssl/evp.h>
 
 /**
  * opens a tcpserver to receive the data works on both ipv4 and ipv6
@@ -66,9 +68,6 @@ void ipvTcpServer(pThreadData data, bool ipv4) {
             continue;
         }
         getFileTCPAndSendTime(data, clientFD);
-        char done[5];
-        snprintf(done, sizeof(done), "DONE");
-        send(data->socket, done, strlen(done), 0);
         close(clientFD);
         break;
     }
@@ -80,36 +79,37 @@ void ipvTcpServer(pThreadData data, bool ipv4) {
  * @param data struct to pass data from the main thread
  * @param clientFD
  */
-void getFileTCPAndSendTime(pThreadData data, bool clientFD) {
-    long startTime = getCurrentTime();
-    receiveTCPFile(clientFD);
+void getFileTCPAndSendTime(pThreadData data, int clientFD) {
+    receiveTCPFile(data, clientFD);
     long endTime = getCurrentTime();
-    long elapsedTime = endTime - startTime;
-    char elapsedStr[200];
-    snprintf(elapsedStr, sizeof(elapsedStr), "%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
-    send(data->socket, elapsedStr, strlen(elapsedStr), 0);
+    char endTimeStr[200];
+    snprintf(endTimeStr, sizeof(endTimeStr), "endTime %ld\n", endTime);
+    if (send(clientFD, endTimeStr, sizeof(endTimeStr), 0) == -1) {
+        perror("send");
+        exit(1);
+    }
 }
 
 /**
  * receive the file and write the data into a file named received_file
  * @param clientFD the client socket
  */
-void receiveTCPFile(int clientFD) {
-    FILE *fp = fopen("received_file", "wb");
+void receiveTCPFile(pThreadData data, int clientFD) {
+    FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {
         perror("fopen");
         exit(1);
     }
     char buffer[1024] = {0};
-    size_t bytes_read;
-    size_t total_bytes_read = 0;
+    ssize_t bytes_read;
+    ssize_t total_bytes_read = 0;
     while ((bytes_read = recv(clientFD, buffer, sizeof(buffer), 0)) > 0) {
         if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
             perror("fwrite");
             exit(1);
         }
         total_bytes_read += bytes_read;
-        if (total_bytes_read >= 100 * 1024 * 1024 || total_bytes_read == 104783872) {
+        if (total_bytes_read >= 104857600) {
             break;
         }
     }
@@ -118,6 +118,18 @@ void receiveTCPFile(int clientFD) {
         exit(1);
     }
     fclose(fp);
+    unsigned char received_checksum[32];
+    if (recv(clientFD, received_checksum, sizeof(received_checksum), 0) != sizeof(received_checksum)) {
+        perror("recv");
+        exit(1);
+    }
+
+    // Verify the checksum
+    if (verifyChecksum("file_received", received_checksum)) {
+        if (!data->quiteMode)printf("Checksum verification succeeded: The received file is intact.\n");
+    } else {
+        if (!data->quiteMode)printf("Checksum verification failed: The received file is corrupted or altered.\n");
+    }
 }
 
 /**
@@ -139,7 +151,7 @@ void ipvTcpClient(pThreadData data, bool ipv4) {
         memset(&serv_addr, 0, sizeof(serv_addr));
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_port = htons(data->port);
-        if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        if (inet_pton(AF_INET, data->ip, &serv_addr.sin_addr) <= 0) {
             perror("inet_pton");
             exit(1);
         }
@@ -161,17 +173,21 @@ void ipvTcpClient(pThreadData data, bool ipv4) {
             exit(1);
         }
     }
-
-    sendTCPFile(client_socket);
-
-    char buffer[5] = {0};
+    long startTime = getCurrentTime();
+    sendTCPFile(data, client_socket);
+    char buffer[64] = {0};
     ssize_t bytes_received;
+    long endTime = 0;
     while ((bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0)) > 0) {
         buffer[bytes_received] = '\0';
-        if (strcmp(buffer, "DONE!") == 0) {
+        int result = sscanf(buffer, "endTime %ld", &endTime);
+        if (result == 1) {
             break;
         }
     }
+
+    long elapsedTime = endTime - startTime;
+    printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
     if (bytes_received == -1) {
         perror("recv");
         exit(1);
@@ -184,20 +200,46 @@ void ipvTcpClient(pThreadData data, bool ipv4) {
  * send the 100mb file to the server
  * @param clientFD the client socket
  */
-void sendTCPFile(int clientFD) {
+void sendTCPFile(pThreadData data, int clientFD) {
     FILE *fp = fopen("file", "rb");
     if (fp == NULL) {
         perror("fopen");
+        exit(1);
+    }
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (mdctx == NULL) {
+        perror("EVP_MD_CTX_new");
+        exit(1);
+    }
+    if (EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL) != 1) {
+        perror("EVP_DigestInit_ex");
         exit(1);
     }
     char buffer[1024] = {0};
     size_t bytes_read;
 
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        if (EVP_DigestUpdate(mdctx, buffer, bytes_read) != 1) {
+            perror("EVP_DigestUpdate");
+            exit(1);
+        }
         if (send(clientFD, buffer, bytes_read, 0) == -1) {
             perror("send");
             exit(1);
         }
     }
+    unsigned int checksumLen;
+    unsigned char checksum[EVP_MAX_MD_SIZE];
+    if (EVP_DigestFinal_ex(mdctx, checksum, &checksumLen) != 1) {
+        perror("EVP_DigestFinal_ex");
+        exit(1);
+    }
+
+    EVP_MD_CTX_free(mdctx);
     fclose(fp);
+
+    if (send(clientFD, checksum, checksumLen, 0) == -1) {
+        perror("send");
+        exit(1);
+    }
 }

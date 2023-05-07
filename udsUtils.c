@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/un.h>
-
 #include "udsUtils.h"
 
 /**
@@ -102,7 +101,7 @@ void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struc
  * @param addrLen
  */
 void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrLen) {
-    FILE *fp = fopen("received_file", "wb");
+    FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {
         perror("fopen");
         exit(1);

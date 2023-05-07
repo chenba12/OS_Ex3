@@ -6,13 +6,13 @@
 
 void ipvTcpServer(pThreadData data, bool ipv4);
 
-void getFileTCPAndSendTime(pThreadData data, bool clientFD);
+void getFileTCPAndSendTime(pThreadData data, int clientFD);
 
-void receiveTCPFile(int clientFD);
+void receiveTCPFile(pThreadData data, int clientFD);
 
 void ipvTcpClient(pThreadData data, bool ipv4);
 
-void sendTCPFile(int clientFD);
+void sendTCPFile(pThreadData data, int clientFD);
 
 
 #endif
