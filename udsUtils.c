@@ -5,6 +5,9 @@
 #include <string.h>
 #include <sys/un.h>
 #include "udsUtils.h"
+#include <openssl/evp.h>
+
+long fileSize = 104857600;
 
 /**
  *
@@ -57,19 +60,13 @@ void udsServer(pThreadData data, bool datagram) {
         }
         break;
     }
-
-
-    char done[5];
-    snprintf(done, sizeof(done), "DONE");
-    send(data->socket, done, strlen(done), 0);
-
-    sleep(2);
     close(server_socket);
     if (remove("/tmp/uds_socket") == -1) {
         perror("remove");
         exit(1);
     }
 }
+
 /**
  *
  * @param data struct to pass data from the main thread
@@ -80,17 +77,21 @@ void udsServer(pThreadData data, bool datagram) {
  */
 void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr,
                            socklen_t *addrLen) {
-    long startTime = getCurrentTime();
-    receiveUDSFile(server_fd, datagram, client_addr, addrLen);
+    receiveUDSFile(data, server_fd, datagram, client_addr, addrLen);
     long endTime = getCurrentTime();
-    long elapsedTime = endTime - startTime;
-    char elapsedStr[200];
-    if (strcmp(data->testParam, "stream\n") == 0) {
-        snprintf(elapsedStr, sizeof(elapsedStr), "%s_stream,%ld\n", data->testType, elapsedTime);
+    char endTimeStr[200];
+    snprintf(endTimeStr, sizeof(endTimeStr), "endTime %ld\n", endTime);
+    if (datagram) {
+        if (sendto(server_fd, endTimeStr, sizeof(endTimeStr), 0, NULL, 0) == -1) {
+            perror("sendto");
+            exit(1);
+        }
     } else {
-        snprintf(elapsedStr, sizeof(elapsedStr), "%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
+        if (send(server_fd, endTimeStr, sizeof(endTimeStr), 0) == -1) {
+            perror("send");
+            exit(1);
+        }
     }
-    send(data->socket, elapsedStr, strlen(elapsedStr), 0);
 }
 
 /**
@@ -100,7 +101,8 @@ void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struc
  * @param client_addr
  * @param addrLen
  */
-void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrLen) {
+void
+receiveUDSFile(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrLen) {
     FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {
         perror("fopen");
@@ -118,7 +120,7 @@ void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_add
                 exit(1);
             }
             total_bytes_read += bytes_read;
-            if (total_bytes_read >= 100 * 1024 * 1024 || total_bytes_read == 104783872) {
+            if (total_bytes_read >= fileSize) {
                 break;
             }
         }
@@ -129,17 +131,36 @@ void receiveUDSFile(int server_fd, bool datagram, struct sockaddr_un *client_add
                 exit(1);
             }
             total_bytes_read += bytes_read;
-            if (total_bytes_read >= 100 * 1024 * 1024 || total_bytes_read == 104783872) {
+            if (total_bytes_read >= fileSize) {
                 break;
+            }
+            if (bytes_read == -1) {
+                perror("recv");
+                exit(1);
             }
         }
     }
-
-    if (bytes_read == -1) {
-        perror("recv");
-        exit(1);
-    }
     fclose(fp);
+    unsigned char received_checksum[32];
+    if (datagram) {
+        if (recvfrom(server_fd, received_checksum, sizeof(received_checksum), 0, (struct sockaddr *) client_addr,
+                     addrLen) !=
+            sizeof(received_checksum)) {
+            perror("recv");
+            exit(1);
+        }
+    } else {
+        if (recv(server_fd, received_checksum, sizeof(received_checksum), 0) != sizeof(received_checksum)) {
+            perror("recv");
+            exit(1);
+        }
+    }
+    // Verify the checksum
+    if (verifyChecksum("file_received", received_checksum)) {
+        if (!data->quiteMode)printf("Checksum verification succeeded: The received file is intact.\n");
+    } else {
+        if (!data->quiteMode)printf("Checksum verification failed: The received file is corrupted or altered.\n");
+    }
 }
 
 /**
@@ -164,21 +185,25 @@ void udsClient(pThreadData data, bool datagram) {
         perror("connect");
         exit(1);
     }
-
+    long startTime = getCurrentTime();
     sendUDSFile(client_socket, datagram);
 
-    char buffer[5] = {0};
+    char buffer[64] = {0};
     ssize_t bytes_received;
+    long endTime = 0;
     while ((bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0)) > 0) {
         buffer[bytes_received] = '\0';
-        if (strcmp(buffer, "DONE!") == 0) {
+        int result = sscanf(buffer, "endTime %ld", &endTime);
+        if (result == 1) {
             break;
         }
+        if (bytes_received == -1) {
+            perror("recv");
+            exit(1);
+        }
     }
-    if (bytes_received == -1) {
-        perror("recv");
-        exit(1);
-    }
+    long elapsedTime = endTime - startTime;
+    printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
 
     close(client_socket);
 }
@@ -194,9 +219,22 @@ void sendUDSFile(int clientFD, bool datagram) {
         perror("fopen");
         exit(1);
     }
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (mdctx == NULL) {
+        perror("EVP_MD_CTX_new");
+        exit(1);
+    }
+    if (EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL) != 1) {
+        perror("EVP_DigestInit_ex");
+        exit(1);
+    }
     char buffer[1024] = {0};
     size_t bytes_read;
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        if (EVP_DigestUpdate(mdctx, buffer, bytes_read) != 1) {
+            perror("EVP_DigestUpdate");
+            exit(1);
+        }
         if (datagram) {
             if (sendto(clientFD, buffer, bytes_read, 0, NULL, 0) == -1) {
                 perror("sendto");
@@ -209,5 +247,24 @@ void sendUDSFile(int clientFD, bool datagram) {
             }
         }
     }
+    unsigned int checksumLen;
+    unsigned char checksum[EVP_MAX_MD_SIZE];
+    if (EVP_DigestFinal_ex(mdctx, checksum, &checksumLen) != 1) {
+        perror("EVP_DigestFinal_ex");
+        exit(1);
+    }
+
+    if (datagram) {
+        if (sendto(clientFD, checksum, checksumLen, 0, NULL, 0) == -1) {
+            perror("sendto");
+            exit(1);
+        }
+    } else {
+        if (send(clientFD, checksum, checksumLen, 0) == -1) {
+            perror("send");
+            exit(1);
+        }
+    }
+    EVP_MD_CTX_free(mdctx);
     fclose(fp);
 }

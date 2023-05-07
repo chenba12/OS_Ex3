@@ -59,7 +59,6 @@ void udpServer(pThreadData data, bool ipv4) {
     send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
 
     getFileUDPAndSendTime(data, serverSocket);
-//    close(serverSocket);
 }
 
 /**
