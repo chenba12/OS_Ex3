@@ -71,47 +71,59 @@ void udpServer(pThreadData data, bool ipv4) {
  * @param clientFD client socket
  */
 void getFileUDPAndSendTime(pThreadData data, int clientFD) {
-    long startTime = getCurrentTime();
-    receiveUdpFile(clientFD);
+    struct sockaddr_storage client_addr;
+    socklen_t addrLen = sizeof(client_addr);
+    receiveUdpFile(clientFD, (struct sockaddr *) &client_addr, &addrLen);
     long endTime = getCurrentTime();
-    long elapsedTime = endTime - startTime;
-    char elapsedStr[200];
-    snprintf(elapsedStr, sizeof(elapsedStr), "%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
-    send(data->socket, elapsedStr, strlen(elapsedStr), 0);
+    char endTimeStr[200];
+    snprintf(endTimeStr, sizeof(endTimeStr), "endTime %ld\n", endTime);
+    if (sendto(clientFD, endTimeStr, strlen(endTimeStr), 0, (struct sockaddr *) &client_addr, addrLen) == -1) {
+        perror("sendto");
+        exit(1);
+    }
 }
 
 /**
  * receive the file and write the data into a file named received_file
  * @param clientFD client socket
+ * @param client_addr client address
+ * @param addrLen length of client address
  */
-void receiveUdpFile(int clientFD) {
-    struct sockaddr_in client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
+void receiveUdpFile(int clientFD, struct sockaddr *client_addr, socklen_t *addrLen) {
     FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {
         perror("fopen");
         exit(1);
     }
-    char buffer[10000] = {0};
+    char buffer[50000] = {0};
     size_t bytes_read;
     size_t total_bytes_read = 0;
-    while ((bytes_read = recvfrom(clientFD, buffer, sizeof(buffer), 0, (struct sockaddr *) &client_addr,
-                                  &client_addr_len)) > 0) {
+    int ack = 1;
+    while ((bytes_read = recvfrom(clientFD, buffer, sizeof(buffer), 0, client_addr,
+                                  addrLen)) > 0) {
         if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
             perror("fwrite");
             exit(1);
         }
         total_bytes_read += bytes_read;
-        if (total_bytes_read >= 100 * 1024 * 1024 || total_bytes_read == 104783872) {
+
+        // Send ACK
+        if (sendto(clientFD, &ack, sizeof(ack), 0, client_addr, *addrLen) == -1) {
+            perror("sendto");
+            exit(1);
+        }
+
+        if (total_bytes_read >= 104857600) {
             break;
         }
-    }
-    if (bytes_read == -1) {
-        perror("recvfrom");
-        exit(1);
+        if (bytes_read == -1) {
+            perror("recvfrom");
+            exit(1);
+        }
     }
     fclose(fp);
 }
+
 
 /**
  * open a tcp connection with the server works with ipv4 and ipv6
@@ -164,20 +176,27 @@ void udpClient(pThreadData data, bool ipv4) {
         addr = (struct sockaddr *) &server_addr;
         addrLen = sizeof(server_addr);
     }
-
+    long startTime = getCurrentTime();
     sendUdpFile(client_socket, addr, addrLen);
-    char buffer[5] = {0};
+    char buffer[64] = {0};
     ssize_t bytes_received;
-    while ((bytes_received = recv(data->socket, buffer, sizeof(buffer) - 1, 0)) >= -1) {
+    long endTime = 0;
+    struct sockaddr_storage server_addr_from;
+    socklen_t addrLenFrom = sizeof(server_addr_from);
+    while ((bytes_received = recvfrom(client_socket, buffer, sizeof(buffer) - 1, 0,
+                                      (struct sockaddr *) &server_addr_from, &addrLenFrom)) > 0) {
         buffer[bytes_received] = '\0';
-        if (strcmp(buffer, "DONE!") == 0) {
+        int result = sscanf(buffer, "endTime %ld", &endTime);
+        if (result == 1) {
             break;
         }
+        if (bytes_received == -1) {
+            perror("recvfrom");
+            exit(1);
+        }
     }
-    if (bytes_received == -1) {
-        perror("recv");
-        exit(1);
-    }
+    long elapsedTime = endTime - startTime;
+    printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
     close(client_socket);
 }
 
@@ -193,18 +212,21 @@ void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen) {
         perror("fopen");
         exit(1);
     }
-    char buffer[10000];
+    char buffer[50000];
     size_t bytes_read;
     size_t bytes_sent;
     size_t sum = 0;
+    int ack;
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
         if ((bytes_sent = sendto(clientFD, buffer, bytes_read, 0, addr, addrLen)) == -1) {
             perror("sendto");
             exit(1);
         }
         sum += bytes_sent;
-        //fail transfer fails if sent too much at once
-        usleep(10);
+        if (recvfrom(clientFD, &ack, sizeof(ack), 0, addr, &addrLen) == -1) {
+            perror("recvfrom");
+            exit(1);
+        }
     }
     fclose(fp);
 }

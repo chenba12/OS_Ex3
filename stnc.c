@@ -19,14 +19,14 @@
 // function signatures
 void checkFlags(int argc, char *const *argv);
 
-void serverHandler(long port, bool testMode, bool quiteMode, char *ip);
+void serverHandler(long port, bool testMode, bool quiteMode, char *ip, bool partA);
 
-void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam);
+void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam, bool partA);
 
 
 void
 startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode,
-          char *ip);
+          char *ip, bool partA);
 
 int checkConnection(char *testType, char *testParam);
 
@@ -55,6 +55,7 @@ void checkFlags(int argc, char *const *argv) {
     char *testType = NULL;
     char *testParam = NULL;
     bool quiteMode = false;
+    bool partA = false;
     if (argc >= 3 && argc <= 7) {
         int result = strcmp(argv[1], "-c");
         if (result == 0) {
@@ -90,7 +91,8 @@ void checkFlags(int argc, char *const *argv) {
                     errorMessage();
                 }
             }
-            clientHandler(ip, port, testMode, testType, testParam);
+            if (argc <= 5) partA = true;
+            clientHandler(ip, port, testMode, testType, testParam, partA);
         } else {
             result = strcmp(argv[1], "-s");
             if (result == 0) {
@@ -106,7 +108,8 @@ void checkFlags(int argc, char *const *argv) {
                         }
                     }
                 }
-                serverHandler(port, testMode, quiteMode, NULL);
+                if (argc <= 5) partA = true;
+                serverHandler(port, testMode, quiteMode, NULL, partA);
             } else {
                 errorMessage();
             }
@@ -122,7 +125,7 @@ void checkFlags(int argc, char *const *argv) {
  * @param testMode if -p flag is active or not
  * @param quiteMode if -q flag is active or not
  */
-void serverHandler(long port, bool testMode, bool quiteMode, char *ip) {
+void serverHandler(long port, bool testMode, bool quiteMode, char *ip, bool partA) {
     createFile();
     deleteFile();
     int serverSocket;
@@ -166,9 +169,8 @@ void serverHandler(long port, bool testMode, bool quiteMode, char *ip) {
         }
         if (!quiteMode)printf("----New client connected----\n");
         fflush(stdin);
-        startChat(clientSocket, port, true, testMode, NULL, NULL, quiteMode, ip);
+        startChat(clientSocket, port, true, testMode, NULL, NULL, quiteMode, ip, partA);
         close(clientSocket);
-        break;
     }
     close(serverSocket);
 }
@@ -181,7 +183,7 @@ void serverHandler(long port, bool testMode, bool quiteMode, char *ip) {
  * @param testType ipv4/ipv6/uds/mmap/pipe
  * @param testParam tcp/udp/dgram/stream/filename
  */
-void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam) {
+void clientHandler(char *ip, long port, bool testMode, char *testType, char *testParam, bool partA) {
     int clientSocket;
     if ((clientSocket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         perror("Failed to open a TCP connection");
@@ -203,7 +205,7 @@ void clientHandler(char *ip, long port, bool testMode, char *testType, char *tes
         close(clientSocket);
         exit(5);
     }
-    startChat(clientSocket, port, false, testMode, testType, testParam, false, ip);
+    startChat(clientSocket, port, false, testMode, testType, testParam, false, ip, partA);
 }
 
 /**
@@ -219,7 +221,7 @@ void clientHandler(char *ip, long port, bool testMode, char *testType, char *tes
  */
 void
 startChat(int socket, long port, bool clientOrServer, bool testMode, char *testType, char *testParam, bool quiteMode,
-          char *ip) {
+          char *ip, bool partA) {
     bool firstMessage = true;
     fd_set readFDs, writeFDs;
     char sendBuffer[1024] = {0};
@@ -229,8 +231,7 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
     int flags = fcntl(socket, F_GETFL, 0);
     fcntl(socket, F_SETFL, flags | O_NONBLOCK);
 
-    if (clientOrServer == false && testMode == true) {
-
+    if (clientOrServer == false && testMode == true && !partA) {
         if (testType != NULL && testParam != NULL) {
             snprintf(sendBuffer, sizeof(sendBuffer), "%s %s\n", testType, testParam);
             ssize_t bytesSent = send(socket, sendBuffer, strlen(sendBuffer), 0);
@@ -243,7 +244,7 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
         }
     }
     //sever sending quiteMode
-    if (clientOrServer && testMode && quiteMode) {
+    if (clientOrServer && testMode && quiteMode && !partA) {
         snprintf(sendBuffer, sizeof(sendBuffer), "true");
         ssize_t bytesSent = send(socket, sendBuffer, strlen(sendBuffer), 0);
         if (bytesSent == -1) {
@@ -278,7 +279,8 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 exit(1);
             } else if (bytesRead == 0) {
                 if (!quiteMode)printf("Connection closed by remote host\n");
-                exit(0);
+                return;
+//                exit(0);
             } else if (bytesRead > 0) {
                 recvBuffer[bytesRead] = '\0';
                 if (strcmp(recvBuffer, "true") == 0) {
@@ -289,7 +291,7 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                 }
                 // if the client got a ready message from the client it can
                 // launch its own thread that handle the communication in -p mode
-                if (!clientOrServer && testMode && firstMessage) {
+                if (!clientOrServer && testMode && firstMessage && !partA) {
                     if (strcmp(recvBuffer, "~~Ready~~!") == 0) {
                         pthread_t thread;
                         pThreadData data = malloc(sizeof(ThreadData));
@@ -310,7 +312,7 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
                     }
                 }
                 //launch a new thread that handles the server communication type
-                if (clientOrServer && testMode && firstMessage) {
+                if (clientOrServer && testMode && firstMessage && !partA) {
                     // testType and testParam are sent with " " (space) between them
                     char *token = strtok(recvBuffer, " ");
                     if (token != NULL) {

@@ -69,7 +69,6 @@ void ipvTcpServer(pThreadData data, bool ipv4) {
         }
         getFileTCPAndSendTime(data, clientFD);
         close(clientFD);
-        break;
     }
     close(server_socket);
 }
@@ -184,15 +183,13 @@ void ipvTcpClient(pThreadData data, bool ipv4) {
         if (result == 1) {
             break;
         }
+        if (bytes_received == -1) {
+            perror("recv");
+            exit(1);
+        }
     }
-
     long elapsedTime = endTime - startTime;
     printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
-    if (bytes_received == -1) {
-        perror("recv");
-        exit(1);
-    }
-
     close(client_socket);
 }
 
