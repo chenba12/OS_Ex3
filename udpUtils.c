@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include "udpUtils.h"
 #include "utils.h"
+#include <openssl/evp.h>
 
 /**
  * opens a udp server to receive the data works on both ipv4 and ipv6
@@ -58,11 +59,7 @@ void udpServer(pThreadData data, bool ipv4) {
     send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
 
     getFileUDPAndSendTime(data, serverSocket);
-
-    char done[5];
-    snprintf(done, sizeof(done), "DONE");
-    send(data->socket, done, strlen(done), 0);
-    close(serverSocket);
+//    close(serverSocket);
 }
 
 /**
@@ -73,7 +70,7 @@ void udpServer(pThreadData data, bool ipv4) {
 void getFileUDPAndSendTime(pThreadData data, int clientFD) {
     struct sockaddr_storage client_addr;
     socklen_t addrLen = sizeof(client_addr);
-    receiveUdpFile(clientFD, (struct sockaddr *) &client_addr, &addrLen);
+    receiveUdpFile(data, clientFD, (struct sockaddr *) &client_addr, &addrLen);
     long endTime = getCurrentTime();
     char endTimeStr[200];
     snprintf(endTimeStr, sizeof(endTimeStr), "endTime %ld\n", endTime);
@@ -89,7 +86,7 @@ void getFileUDPAndSendTime(pThreadData data, int clientFD) {
  * @param client_addr client address
  * @param addrLen length of client address
  */
-void receiveUdpFile(int clientFD, struct sockaddr *client_addr, socklen_t *addrLen) {
+void receiveUdpFile(pThreadData data, int clientFD, struct sockaddr *client_addr, socklen_t *addrLen) {
     FILE *fp = fopen("file_received", "wb");
     if (fp == NULL) {
         perror("fopen");
@@ -120,6 +117,19 @@ void receiveUdpFile(int clientFD, struct sockaddr *client_addr, socklen_t *addrL
             perror("recvfrom");
             exit(1);
         }
+    }
+    unsigned char received_checksum[32];
+    if (recvfrom(clientFD, received_checksum, sizeof(received_checksum), 0, client_addr,
+                 addrLen) != sizeof(received_checksum)) {
+        perror("recv");
+        exit(1);
+    }
+
+    // Verify the checksum
+    if (verifyChecksum("file_received", received_checksum)) {
+        if (!data->quiteMode)printf("Checksum verification succeeded: The received file is intact.\n");
+    } else {
+        if (!data->quiteMode)printf("Checksum verification failed: The received file is corrupted or altered.\n");
     }
     fclose(fp);
 }
@@ -212,12 +222,25 @@ void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen) {
         perror("fopen");
         exit(1);
     }
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (mdctx == NULL) {
+        perror("EVP_MD_CTX_new");
+        exit(1);
+    }
+    if (EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL) != 1) {
+        perror("EVP_DigestInit_ex");
+        exit(1);
+    }
     char buffer[50000];
     size_t bytes_read;
     size_t bytes_sent;
     size_t sum = 0;
     int ack;
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        if (EVP_DigestUpdate(mdctx, buffer, bytes_read) != 1) {
+            perror("EVP_DigestUpdate");
+            exit(1);
+        }
         if ((bytes_sent = sendto(clientFD, buffer, bytes_read, 0, addr, addrLen)) == -1) {
             perror("sendto");
             exit(1);
@@ -227,6 +250,19 @@ void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen) {
             perror("recvfrom");
             exit(1);
         }
+    }
+    unsigned int checksumLen;
+    unsigned char checksum[EVP_MAX_MD_SIZE];
+    if (EVP_DigestFinal_ex(mdctx, checksum, &checksumLen) != 1) {
+        perror("EVP_DigestFinal_ex");
+        exit(1);
+    }
+
+    EVP_MD_CTX_free(mdctx);
+
+    if (sendto(clientFD, checksum, sizeof(checksum), 0, addr, addrLen) == -1) {
+        perror("sendto");
+        exit(1);
     }
     fclose(fp);
 }

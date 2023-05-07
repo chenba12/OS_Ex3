@@ -108,7 +108,7 @@ void checkFlags(int argc, char *const *argv) {
                         }
                     }
                 }
-                if (argc <= 5) partA = true;
+                if (argc == 3) partA = true;
                 serverHandler(port, testMode, quiteMode, NULL, partA);
             } else {
                 errorMessage();

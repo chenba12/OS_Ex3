@@ -69,6 +69,7 @@ void ipvTcpServer(pThreadData data, bool ipv4) {
         }
         getFileTCPAndSendTime(data, clientFD);
         close(clientFD);
+        break;
     }
     close(server_socket);
 }
