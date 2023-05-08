@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <openssl/evp.h>
 
 /**
  * this is the mmap server method
@@ -15,6 +16,24 @@
  * @param data struct passed from the main thread
  */
 void mmapServer(pThreadData data) {
+    const char *semaphore_shm_name = "/my_semaphore";
+    int semaphore_shm_fd = shm_open(semaphore_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    if (semaphore_shm_fd == -1) {
+        perror("shm_open");
+        exit(1);
+    }
+
+    if (ftruncate(semaphore_shm_fd, sizeof(int)) == -1) {
+        perror("ftruncate");
+        exit(1);
+    }
+
+    int *semaphore_addr = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, semaphore_shm_fd, 0);
+    if (semaphore_addr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
+    *semaphore_addr = 0;
     const char *shm_name = "/my_shm";
     int shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if (shm_fd == -1) {
@@ -23,7 +42,7 @@ void mmapServer(pThreadData data) {
     }
 
     // Set the size of the shared memory segment (100MB)
-    off_t size = 100 * 1024 * 1024;
+    off_t size = 104857600;
     if (ftruncate(shm_fd, size) == -1) {
         perror("ftruncate");
         exit(1);
@@ -35,11 +54,6 @@ void mmapServer(pThreadData data) {
         exit(1);
     }
 
-    struct stat file_stat;
-    if (fstat(shm_fd, &file_stat) == -1) {
-        perror("fstat");
-        exit(1);
-    }
     send(data->socket, "~~Ready~~!", strlen("~~Ready~~!"), 0);
 
     FILE *fp = fopen("file_received", "wb");
@@ -47,27 +61,67 @@ void mmapServer(pThreadData data) {
         perror("fopen");
         exit(1);
     }
-    long startTime = getCurrentTime();
-    if (fwrite(addr + sizeof(int), 1, size - sizeof(int), fp) != size - sizeof(int)) {
+    if (fwrite(addr, 1, size - EVP_MD_size(EVP_sha256()), fp) != size - EVP_MD_size(EVP_sha256())) {
         perror("fwrite");
         exit(1);
     }
-    long endTime = getCurrentTime();
-    long elapsedTime = endTime - startTime;
-    char elapsedStr[200];
-    snprintf(elapsedStr, sizeof(elapsedStr), "%s,%ld\n", data->testType, elapsedTime);
-    printf("%s\n", elapsedStr);
     fclose(fp);
+
+    unsigned char received_checksum[EVP_MAX_MD_SIZE];
+    memcpy(received_checksum, addr + size - EVP_MD_size(EVP_sha256()), EVP_MD_size(EVP_sha256()));
+
+    if (verifyChecksumMmap(addr, size - EVP_MD_size(EVP_sha256()), received_checksum)) {
+        if (!data->quiteMode)printf("Checksum verification succeeded: The received file is intact.\n");
+    } else {
+        if (!data->quiteMode)printf("Checksum verification failed: The received file is corrupted or altered.\n");
+    }
+
+    if (munmap(addr, size + EVP_MD_size(EVP_sha256())) == -1) {
+        perror("munmap");
+        exit(1);
+    }
+    long endTime = getCurrentTime();
+    const char *end_time_shm_name = "/my_shm_end_time";
+    int end_time_shm_fd = shm_open(end_time_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    if (end_time_shm_fd == -1) {
+        perror("shm_open");
+        exit(1);
+    }
+
+    if (ftruncate(end_time_shm_fd, sizeof(endTime)) == -1) {
+        perror("ftruncate");
+        exit(1);
+    }
+
+    void *end_time_addr = mmap(NULL, sizeof(endTime), PROT_READ | PROT_WRITE, MAP_SHARED, end_time_shm_fd, 0);
+    if (end_time_addr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
+
+    memcpy(end_time_addr, &endTime, sizeof(endTime));
+    *semaphore_addr = 1;
 
     if (munmap(addr, size) == -1) {
         perror("munmap");
         exit(1);
     }
+    if (munmap(semaphore_addr, sizeof(int)) == -1) {
+        perror("munmap");
+        exit(1);
+    }
 
-    if (shm_unlink(shm_name) == -1) {
+    if (shm_unlink(semaphore_shm_name) == -1) {
         perror("shm_unlink");
         exit(1);
     }
+
+}
+
+bool verifyChecksumMmap(const void *data, size_t size, const unsigned char *checksum) {
+    unsigned char calculated[EVP_MAX_MD_SIZE];
+    calculateChecksum(data, size, calculated);
+    return memcmp(calculated, checksum, EVP_MD_size(EVP_sha256())) == 0;
 }
 
 /**
@@ -76,6 +130,24 @@ void mmapServer(pThreadData data) {
  * @param data struct passed from the main thread
  */
 void mmapClient(pThreadData data) {
+    const char *semaphore_shm_name = "/my_semaphore";
+    int semaphore_shm_fd = shm_open(semaphore_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    if (semaphore_shm_fd == -1) {
+        perror("shm_open");
+        exit(1);
+    }
+
+    if (ftruncate(semaphore_shm_fd, sizeof(int)) == -1) {
+        perror("ftruncate");
+        exit(1);
+    }
+
+    int *semaphore_addr = mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, semaphore_shm_fd, 0);
+    if (semaphore_addr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
+    long startTime = getCurrentTime();
     int fd = open(data->testParam, O_RDONLY);
     if (fd == -1) {
         perror("open");
@@ -102,12 +174,12 @@ void mmapClient(pThreadData data) {
         exit(1);
     }
 
-    if (ftruncate(shm_fd, size) == -1) {
+    if (ftruncate(shm_fd, size + EVP_MD_size(EVP_sha256())) == -1) {
         perror("ftruncate");
         exit(1);
     }
 
-    void *shm_addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    void *shm_addr = mmap(NULL, size + EVP_MD_size(EVP_sha256()), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shm_addr == MAP_FAILED) {
         perror("mmap");
         exit(1);
@@ -115,6 +187,44 @@ void mmapClient(pThreadData data) {
 
     memcpy(shm_addr, addr, size);
 
+    unsigned char checksum[EVP_MAX_MD_SIZE];
+    calculateChecksum(addr, size, checksum);
+    memcpy(shm_addr + size, checksum, EVP_MD_size(EVP_sha256()));
+
+    if (munmap(addr, size) == -1) {
+        perror("munmap");
+        exit(1);
+    }
+    const char *end_time_shm_name = "/my_shm_end_time";
+    int end_time_shm_fd = shm_open(end_time_shm_name, O_RDONLY, S_IRUSR);
+    if (end_time_shm_fd == -1) {
+        perror("shm_open");
+        exit(1);
+    }
+
+    while (*semaphore_addr == 0) {
+        usleep(1000); // Sleep for 1000 microseconds (1 millisecond) to avoid busy-waiting
+    }
+    long endTime;
+    void *end_time_addr = mmap(NULL, sizeof(endTime), PROT_READ, MAP_SHARED, end_time_shm_fd, 0);
+    if (end_time_addr == MAP_FAILED) {
+        perror("mmap");
+        exit(1);
+    }
+
+    memcpy(&endTime, end_time_addr, sizeof(endTime));
+    long elapsedTime = endTime - startTime;
+    printf("%s,%ld\n", data->testType, elapsedTime);
+
+    if (munmap(end_time_addr, sizeof(endTime)) == -1) {
+        perror("munmap");
+        exit(1);
+    }
+
+    if (shm_unlink(end_time_shm_name) == -1) {
+        perror("shm_unlink");
+        exit(1);
+    }
     if (munmap(shm_addr, size) == -1) {
         perror("munmap");
         exit(1);
@@ -129,4 +239,48 @@ void mmapClient(pThreadData data) {
         perror("shm_unlink");
         exit(1);
     }
+    if (munmap(semaphore_addr, sizeof(int)) == -1) {
+        perror("munmap");
+        exit(1);
+    }
+
+    if (shm_unlink(semaphore_shm_name) == -1) {
+        perror("shm_unlink");
+        exit(1);
+    }
 }
+
+void calculateChecksum(const void *data, size_t size, unsigned char *checksum) {
+    const EVP_MD *md = EVP_sha256();
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+
+    if (mdctx == NULL) {
+        fprintf(stderr, "Error: Failed to create message digest context\n");
+        exit(1);
+    }
+
+    if (EVP_DigestInit_ex(mdctx, md, NULL) != 1) {
+        fprintf(stderr, "Error: Failed to initialize message digest context\n");
+        exit(1);
+    }
+
+    if (EVP_DigestUpdate(mdctx, data, size) != 1) {
+        fprintf(stderr, "Error: Failed to update message digest context\n");
+        exit(1);
+    }
+
+    unsigned int checksum_len;
+    if (EVP_DigestFinal_ex(mdctx, checksum, &checksum_len) != 1) {
+        fprintf(stderr, "Error: Failed to finalize message digest context\n");
+        exit(1);
+    }
+
+    EVP_MD_CTX_free(mdctx);
+}
+
+
+
+
+
+
+

@@ -135,7 +135,7 @@ void pipeClient(pThreadData data) {
     }
     long endTime = getCurrentTime();
     long elapsedTime = endTime - startTime;
-    printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
+    printf("%s,%ld\n", data->testType, elapsedTime);
     sleep(2);
     close(pipe_fd);
     close(pipe_fd2);
