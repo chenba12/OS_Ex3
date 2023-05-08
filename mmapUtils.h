@@ -6,7 +6,6 @@
 
 void mmapServer(pThreadData data);
 
-bool verifyChecksumMmap(const void *data, size_t size, const unsigned char *checksum);
 
 void mmapClient(pThreadData data);
 
