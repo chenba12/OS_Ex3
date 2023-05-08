@@ -228,7 +228,7 @@ void mmapClient(pThreadData data) {
     const char *end_time_shm_name = "/my_shm_end_time";
     int end_time_shm_fd = shm_open(end_time_shm_name, O_RDONLY, S_IRUSR);
     if (end_time_shm_fd == -1) {
-        perror("shm_open?");
+        perror("shm_open");
         exit(1);
     }
 
@@ -275,7 +275,7 @@ void mmapClient(pThreadData data) {
     }
 
     if (shm_unlink(semaphore_shm_name) == -1) {
-        perror("shm_unlink");
+//        perror("shm_unlink");
         exit(1);
     }
 
