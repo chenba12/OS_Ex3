@@ -35,8 +35,6 @@ void *serverTransfer(void *args);
 void *clientTransfer(void *args);
 
 int main(int argc, char *argv[]) {
-
-
     checkFlags(argc, argv);
     return 0;
 }

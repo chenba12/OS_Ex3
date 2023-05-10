@@ -7,6 +7,8 @@
 #include "udpUtils.h"
 #include "utils.h"
 #include <openssl/evp.h>
+#include <errno.h>
+
 
 /**
  * opens a udp server to receive the data works on both ipv4 and ipv6
@@ -81,6 +83,7 @@ void getFileUDPAndSendTime(pThreadData data, int clientFD) {
 
 /**
  * receive the file and write the data into a file named received_file
+ * @param data struct to pass data from the main thread
  * @param clientFD client socket
  * @param client_addr client address
  * @param addrLen length of client address
@@ -95,6 +98,7 @@ void receiveUdpFile(pThreadData data, int clientFD, struct sockaddr *client_addr
     size_t bytes_read;
     size_t total_bytes_read = 0;
     int ack = 1;
+    setTimeout(clientFD, maxTimeout);
     while ((bytes_read = recvfrom(clientFD, buffer, sizeof(buffer), 0, client_addr,
                                   addrLen)) > 0) {
         if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
@@ -108,15 +112,19 @@ void receiveUdpFile(pThreadData data, int clientFD, struct sockaddr *client_addr
             perror("sendto");
             exit(1);
         }
-
         if (total_bytes_read >= 104857600) {
             break;
         }
-        if (bytes_read == -1) {
-            perror("recvfrom");
+    }
+    if (bytes_read == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (!data->quiteMode)printf("Timeout reached\n");
+        } else {
+            perror("recv");
             exit(1);
         }
     }
+    setTimeout(clientFD, noTimeout);
     unsigned char received_checksum[32];
     if (recvfrom(clientFD, received_checksum, sizeof(received_checksum), 0, client_addr,
                  addrLen) != sizeof(received_checksum)) {
@@ -124,7 +132,6 @@ void receiveUdpFile(pThreadData data, int clientFD, struct sockaddr *client_addr
         exit(1);
     }
 
-    // Verify the checksum
     if (verifyChecksum("file_received", received_checksum)) {
         if (!data->quiteMode)printf("Checksum verification succeeded: The received file is intact.\n");
     } else {
@@ -186,12 +193,13 @@ void udpClient(pThreadData data, bool ipv4) {
         addrLen = sizeof(server_addr);
     }
     long startTime = getCurrentTime();
-    sendUdpFile(client_socket, addr, addrLen);
+    sendUdpFile(data, client_socket, addr, addrLen);
     char buffer[64] = {0};
     ssize_t bytes_received;
     long endTime = 0;
     struct sockaddr_storage server_addr_from;
     socklen_t addrLenFrom = sizeof(server_addr_from);
+    setTimeout(client_socket, maxTimeout);
     while ((bytes_received = recvfrom(client_socket, buffer, sizeof(buffer) - 1, 0,
                                       (struct sockaddr *) &server_addr_from, &addrLenFrom)) > 0) {
         buffer[bytes_received] = '\0';
@@ -199,11 +207,17 @@ void udpClient(pThreadData data, bool ipv4) {
         if (result == 1) {
             break;
         }
-        if (bytes_received == -1) {
-            perror("recvfrom");
+    }
+    if (bytes_received == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (!data->quiteMode)printf("Timeout reached\n");
+            endTime = getCurrentTime();
+        } else {
+            perror("recv");
             exit(1);
         }
     }
+    setTimeout(client_socket, noTimeout);
     long elapsedTime = endTime - startTime;
     printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
     close(client_socket);
@@ -215,7 +229,7 @@ void udpClient(pThreadData data, bool ipv4) {
  * @param addr sockaddr struct
  * @param addrLen address length
  */
-void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen) {
+void sendUdpFile(pThreadData data, int clientFD, struct sockaddr *addr, socklen_t addrLen) {
     FILE *fp = fopen("file", "rb");
     if (fp == NULL) {
         perror("fopen");
@@ -235,7 +249,10 @@ void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen) {
     size_t bytes_sent;
     size_t sum = 0;
     int ack;
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+    setTimeout(clientFD, maxTimeout);
+    ssize_t bytes_received = 0;
+    setTimeout(clientFD, maxTimeout);
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), fp)) > 0 && bytes_received >= 0) {
         if (EVP_DigestUpdate(mdctx, buffer, bytes_read) != 1) {
             perror("EVP_DigestUpdate");
             exit(1);
@@ -245,11 +262,17 @@ void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen) {
             exit(1);
         }
         sum += bytes_sent;
-        if (recvfrom(clientFD, &ack, sizeof(ack), 0, addr, &addrLen) == -1) {
-            perror("recvfrom");
+        bytes_received = recvfrom(clientFD, &ack, sizeof(ack), 0, addr, &addrLen);
+    }
+    if (bytes_received == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (!data->quiteMode)printf("Timeout reached\n");
+        } else {
+            perror("recv");
             exit(1);
         }
     }
+    setTimeout(clientFD, noTimeout);
     unsigned int checksumLen;
     unsigned char checksum[EVP_MAX_MD_SIZE];
     if (EVP_DigestFinal_ex(mdctx, checksum, &checksumLen) != 1) {

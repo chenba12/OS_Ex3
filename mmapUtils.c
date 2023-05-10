@@ -13,6 +13,7 @@
  * this is the mmap server method
  * opens a mmap called my_shm(100MB) and then receive the data
  * from the client and writes it to a file called received_file
+ * compare the checksum received to the received_file checksum
  * @param data struct passed from the main thread
  */
 void mmapServer(pThreadData data) {
@@ -138,6 +139,7 @@ void mmapServer(pThreadData data) {
 /**
  * open the file the user entered (data->testParam)
  * and send its data over the mmap
+ * print the result
  * @param data struct passed from the main thread
  */
 void mmapClient(pThreadData data) {
@@ -233,7 +235,7 @@ void mmapClient(pThreadData data) {
     }
 
     while (*semaphore_addr == 0) {
-        usleep(1000); // Sleep for 1000 microseconds (1 millisecond) to avoid busy-waiting
+        usleep(1000);
     }
     long endTime;
     void *end_time_addr = mmap(NULL, sizeof(endTime), PROT_READ, MAP_SHARED, end_time_shm_fd, 0);
@@ -275,12 +277,17 @@ void mmapClient(pThreadData data) {
     }
 
     if (shm_unlink(semaphore_shm_name) == -1) {
-//        perror("shm_unlink");
         exit(1);
     }
 
 }
 
+/**
+ * calculate a checksum for data
+ * @param data
+ * @param size of the data
+ * @param checksum where the result will be stored
+ */
 void calculateChecksum(const void *data, size_t size, unsigned char *checksum) {
     const EVP_MD *md = EVP_sha256();
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();

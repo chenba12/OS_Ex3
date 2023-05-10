@@ -12,7 +12,7 @@ void receiveTCPFile(pThreadData data, int clientFD);
 
 void ipvTcpClient(pThreadData data, bool ipv4);
 
-void sendTCPFile(pThreadData data, int clientFD);
+void sendTCPFile(int clientFD);
 
 
 #endif

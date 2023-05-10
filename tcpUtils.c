@@ -9,6 +9,8 @@
 #include "tcpUtils.h"
 #include "utils.h"
 #include <openssl/evp.h>
+#include <errno.h>
+
 
 /**
  * opens a tcpserver to receive the data works on both ipv4 and ipv6
@@ -77,7 +79,7 @@ void ipvTcpServer(pThreadData data, bool ipv4) {
 /**
  * calculate the time,receive the file and print the results
  * @param data struct to pass data from the main thread
- * @param clientFD
+ * @param clientFD client socket
  */
 void getFileTCPAndSendTime(pThreadData data, int clientFD) {
     receiveTCPFile(data, clientFD);
@@ -92,6 +94,8 @@ void getFileTCPAndSendTime(pThreadData data, int clientFD) {
 
 /**
  * receive the file and write the data into a file named received_file
+ * check the checksum it received vs the actual file
+ * @param data struct to pass data from the main thread
  * @param clientFD the client socket
  */
 void receiveTCPFile(pThreadData data, int clientFD) {
@@ -103,6 +107,7 @@ void receiveTCPFile(pThreadData data, int clientFD) {
     char buffer[1024] = {0};
     ssize_t bytes_read;
     ssize_t total_bytes_read = 0;
+    setTimeout(clientFD, maxTimeout);
     while ((bytes_read = recv(clientFD, buffer, sizeof(buffer), 0)) > 0) {
         if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
             perror("fwrite");
@@ -114,17 +119,21 @@ void receiveTCPFile(pThreadData data, int clientFD) {
         }
     }
     if (bytes_read == -1) {
-        perror("recv");
-        exit(1);
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (!data->quiteMode)printf("Timeout reached\n");
+        } else {
+            perror("recv");
+            exit(1);
+        }
     }
+    setTimeout(clientFD, noTimeout);
+
     fclose(fp);
     unsigned char received_checksum[32];
     if (recv(clientFD, received_checksum, sizeof(received_checksum), 0) != sizeof(received_checksum)) {
         perror("recv");
         exit(1);
     }
-
-    // Verify the checksum
     if (verifyChecksum("file_received", received_checksum)) {
         if (!data->quiteMode)printf("Checksum verification succeeded: The received file is intact.\n");
     } else {
@@ -134,7 +143,7 @@ void receiveTCPFile(pThreadData data, int clientFD) {
 
 /**
  * open a tcp connection with the server works with ipv4 and ipv6
- * waits for a message from the server sayings its done with the transfer
+ * waits for a message from the server with the end time and print the result
  * @param data struct to pass data from the main thread
  * @param ipv4 true to use ipv4 false to use ipv6
  */
@@ -174,31 +183,38 @@ void ipvTcpClient(pThreadData data, bool ipv4) {
         }
     }
     long startTime = getCurrentTime();
-    sendTCPFile(data, client_socket);
+    sendTCPFile(client_socket);
     char buffer[64] = {0};
     ssize_t bytes_received;
     long endTime = 0;
+    setTimeout(client_socket, maxTimeout);
     while ((bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0)) > 0) {
         buffer[bytes_received] = '\0';
         int result = sscanf(buffer, "endTime %ld", &endTime);
         if (result == 1) {
             break;
         }
-        if (bytes_received == -1) {
+    }
+    if (bytes_received == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (!data->quiteMode)printf("Timeout reached\n");
+            endTime = getCurrentTime();
+        } else {
             perror("recv");
             exit(1);
         }
     }
+    setTimeout(client_socket, noTimeout);
     long elapsedTime = endTime - startTime;
     printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
     close(client_socket);
 }
 
 /**
- * send the 100mb file to the server
+ * send the 100mb file to the server, calculate the checksum and send it as well
  * @param clientFD the client socket
  */
-void sendTCPFile(pThreadData data, int clientFD) {
+void sendTCPFile(int clientFD) {
     FILE *fp = fopen("file", "rb");
     if (fp == NULL) {
         perror("fopen");

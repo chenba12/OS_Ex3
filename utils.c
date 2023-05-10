@@ -8,6 +8,9 @@
 #include <string.h>
 #include <arpa/inet.h>
 
+int maxTimeout = 5;
+int noTimeout = 0;
+
 /**
  * get current time in milliseconds
  * @return time in milliseconds
@@ -87,6 +90,12 @@ void createFile() {
     close(fd);
 }
 
+/**
+ * get the actual file and the server received Checksum and compare the 2
+ * @param filePath file received
+ * @param receivedChecksum the checksum the server got
+ * @return true if equal false otherwise
+ */
 bool verifyChecksum(const char *filePath, const unsigned char *receivedChecksum) {
     FILE *fp = fopen(filePath, "rb");
     if (fp == NULL) {
@@ -127,23 +136,31 @@ bool verifyChecksum(const char *filePath, const unsigned char *receivedChecksum)
     return memcmp(calculatedChecksum, receivedChecksum, checksumLen) == 0;
 }
 
-//void ipv4ToIpv6(const char *ipv4Str, char *ipv6Str) {
-//    struct sockaddr_in ipv4Address;
-//    struct sockaddr_in6 ipv6Address;
-//
-//    memset(&ipv4Address, 0, sizeof(struct sockaddr_in));
-//    ipv4Address.sin_family = AF_INET;
-//    inet_pton(AF_INET, ipv4Str, &(ipv4Address.sin_addr));
-//
-//    // Initialize the IPv6 address structure
-//    memset(&ipv6Address, 0, sizeof(struct sockaddr_in6));
-//    ipv6Address.sin6_family = AF_INET6;
-//
-//    // Convert the IPv4 address to an IPv4-mapped IPv6 address
-//    uint32_t ipv4_part = ipv4Address.sin_addr.s_addr;
-//    uint8_t ipv4_mapped_ipv6[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF};
-//    memcpy(&ipv4_mapped_ipv6[12], &ipv4_part, sizeof(uint32_t));
-//    memcpy(&ipv6Address.sin6_addr, ipv4_mapped_ipv6, sizeof(ipv4_mapped_ipv6));
-//
-//    inet_ntop(AF_INET6, &(ipv6Address.sin6_addr), ipv6Str, INET6_ADDRSTRLEN);
-//}
+/**
+ * set the socket timeout
+ * @param socket the socket to set the timeout on
+ * @param time in seconds
+ */
+void setTimeout(int socket, int time) {
+    struct timeval timeout;
+    timeout.tv_sec = time;
+    timeout.tv_usec = 0;
+    if (setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout, sizeof(timeout)) < 0) {
+        perror("setsockopt");
+        exit(1);
+    }
+}
+
+/**
+ * check if a string contains space
+ * @param str to check
+ * @return true/false
+ */
+bool stringContainsSpace(const char *str) {
+    for (int i = 0; str[i] != '\0' || str[i] != '\n'; i++) {
+        if (str[i] == ' ') {
+            return true;
+        }
+    }
+    return false;
+}

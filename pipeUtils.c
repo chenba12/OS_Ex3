@@ -12,6 +12,7 @@
  * here we need to send the ready message before opening the pipe or else the thread will hang and block
  * the server create a pipe named my_pipe with read | create flags
  * reads the data the client sent and write a file named file_received
+ * calculate and compare the checksums
  * @param data struct to pass data from the main thread
  */
 void pipeServer(pThreadData data) {
@@ -77,6 +78,7 @@ void pipeServer(pThreadData data) {
 /**
  * open the file the user sent for reading and open my_pipe for writing
  * and send over the file over the pipe
+ * print the time result
  * @param data struct to pass data from the main thread
  */
 void pipeClient(pThreadData data) {
@@ -105,7 +107,6 @@ void pipeClient(pThreadData data) {
         exit(1);
     }
 
-    // Send the file data through the named pipe
     long startTime = getCurrentTime();
     while ((bytes_read = fread(buffer, 1, 1024, fp)) > 0) {
         if (EVP_DigestUpdate(mdctx, buffer, bytes_read) != 1) {

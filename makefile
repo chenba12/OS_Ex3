@@ -1,4 +1,4 @@
-CFLAGS=-Wall -Wextra -O2
+CFLAGS=-Wall -O2
 LDFLAGS=-ldl -lcrypto
 TARGET = stnc
 

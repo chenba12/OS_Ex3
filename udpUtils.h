@@ -13,7 +13,7 @@ void getFileUDPAndSendTime(pThreadData data, int clientFD);
 
 void udpClient(pThreadData data, bool ipv4);
 
-void sendUdpFile(int clientFD, struct sockaddr *addr, socklen_t addrLen);
+void sendUdpFile(pThreadData data, int clientFD, struct sockaddr *addr, socklen_t addrLen);
 
 
 #endif

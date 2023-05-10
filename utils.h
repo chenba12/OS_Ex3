@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+
+extern int maxTimeout;
+extern int noTimeout;
+
 /**
  * a struct used to pass data to the thread
  */
@@ -28,6 +32,8 @@ void createFile();
 
 bool verifyChecksum(const char *filePath, const unsigned char *receivedChecksum);
 
-//void ipv4ToIpv6(const char *ipv4Str, char *ipv6Str);
+void setTimeout(int socket, int time);
+
+bool stringContainsSpace(const char *str);
 
 #endif

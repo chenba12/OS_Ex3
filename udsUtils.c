@@ -6,11 +6,12 @@
 #include <sys/un.h>
 #include "udsUtils.h"
 #include <openssl/evp.h>
+#include <errno.h>
 
 long fileSize = 104857600;
 
 /**
- *
+ * open a uds server socket with type sock dgram/ sock stream
  * @param data struct to pass data from the main thread
  * @param datagram true if its datagram false for stream
  */
@@ -68,12 +69,12 @@ void udsServer(pThreadData data, bool datagram) {
 }
 
 /**
- *
+ * send the end time to the client
  * @param data struct to pass data from the main thread
- * @param server_fd
+ * @param server_fd server socket
  * @param datagram true if its datagram false for stream
- * @param client_addr
- * @param addrLen
+ * @param client_addr client address info
+ * @param addrLen client address length
  */
 void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr,
                            socklen_t *addrLen) {
@@ -95,11 +96,11 @@ void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struc
 }
 
 /**
- *
- * @param server_fd
- * @param datagram
- * @param client_addr
- * @param addrLen
+ * receive the 100mb file and checksum from the client
+ * @param server_fd server socket
+ * @param datagram true if its datagram false for stream
+ * @param client_addr client address info
+ * @param addrLen client address length
  */
 void
 receiveUDSFile(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr, socklen_t *addrLen) {
@@ -113,6 +114,7 @@ receiveUDSFile(pThreadData data, int server_fd, bool datagram, struct sockaddr_u
     size_t total_bytes_read = 0;
 
     if (datagram) {
+        setTimeout(server_fd, maxTimeout);
         while ((bytes_read = recvfrom(server_fd, buffer, sizeof(buffer), 0, (struct sockaddr *) client_addr, addrLen)) >
                0) {
             if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
@@ -124,7 +126,16 @@ receiveUDSFile(pThreadData data, int server_fd, bool datagram, struct sockaddr_u
                 break;
             }
         }
+        if (bytes_read == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (!data->quiteMode)printf("Timeout reached\n");
+            } else {
+                perror("recv");
+                exit(1);
+            }
+        }
     } else {
+        setTimeout(server_fd, maxTimeout);
         while ((bytes_read = recv(server_fd, buffer, sizeof(buffer), 0)) > 0) {
             if (fwrite(buffer, 1, bytes_read, fp) != bytes_read) {
                 perror("fwrite");
@@ -134,7 +145,11 @@ receiveUDSFile(pThreadData data, int server_fd, bool datagram, struct sockaddr_u
             if (total_bytes_read >= fileSize) {
                 break;
             }
-            if (bytes_read == -1) {
+        }
+        if (bytes_read == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (!data->quiteMode)printf("Timeout reached\n");
+            } else {
                 perror("recv");
                 exit(1);
             }
@@ -155,6 +170,7 @@ receiveUDSFile(pThreadData data, int server_fd, bool datagram, struct sockaddr_u
             exit(1);
         }
     }
+    setTimeout(server_fd, noTimeout);
     // Verify the checksum
     if (verifyChecksum("file_received", received_checksum)) {
         if (!data->quiteMode)printf("Checksum verification succeeded: The received file is intact.\n");
@@ -163,8 +179,8 @@ receiveUDSFile(pThreadData data, int server_fd, bool datagram, struct sockaddr_u
     }
 }
 
-/**
- *
+/**opens a uds client and connect to the uds server
+ * uds client send a 100mb file and checksum to the server
  * @param data struct to pass data from the main thread
  * @param datagram true if its datagram false for stream
  */
@@ -191,26 +207,32 @@ void udsClient(pThreadData data, bool datagram) {
     char buffer[64] = {0};
     ssize_t bytes_received;
     long endTime = 0;
+    setTimeout(client_socket, maxTimeout);
     while ((bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0)) > 0) {
         buffer[bytes_received] = '\0';
         int result = sscanf(buffer, "endTime %ld", &endTime);
         if (result == 1) {
             break;
         }
-        if (bytes_received == -1) {
+    }
+    if (bytes_received == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (!data->quiteMode)printf("Timeout reached\n");
+            endTime = getCurrentTime();
+        } else {
             perror("recv");
             exit(1);
         }
     }
+    setTimeout(client_socket, noTimeout);
     long elapsedTime = endTime - startTime;
     printf("%s_%s,%ld\n", data->testType, data->testParam, elapsedTime);
-
     close(client_socket);
 }
 
 /**
- *
- * @param clientFD
+ * this method handle the file and checksum sending
+ * @param clientFD client socket
  * @param datagram true if its datagram false for stream
  */
 void sendUDSFile(int clientFD, bool datagram) {
