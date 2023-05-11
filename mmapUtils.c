@@ -25,13 +25,13 @@ void mmapServer(pThreadData data) {
     const char *end_time_shm_name = "/my_shm_end_time";
     int end_time_shm_fd = shm_open(end_time_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if (end_time_shm_fd == -1) {
-        perror("shm_open");
+        perror("shm_open1");
         exit(1);
     }
     const char *semaphore_shm_name = "/my_semaphore";
     int semaphore_shm_fd = shm_open(semaphore_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if (semaphore_shm_fd == -1) {
-        perror("shm_open");
+        perror("shm_open2");
         exit(1);
     }
 
@@ -49,7 +49,7 @@ void mmapServer(pThreadData data) {
     const char *shm_name = "/my_shm";
     int shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if (shm_fd == -1) {
-        perror("shm_open");
+        perror("shm_open3");
         exit(1);
     }
 
@@ -70,7 +70,7 @@ void mmapServer(pThreadData data) {
     const char *checksum_shm_name = "/my_checksum_shm";
     int checksum_shm_fd = shm_open(checksum_shm_name, O_RDONLY, S_IRUSR);
     if (checksum_shm_fd == -1) {
-        perror("shm_open");
+        perror("shm_open4");
         exit(1);
     }
 
