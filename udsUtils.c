@@ -78,15 +78,20 @@ void udsServer(pThreadData data, bool datagram) {
  */
 void getFileUDSAndSendTime(pThreadData data, int server_fd, bool datagram, struct sockaddr_un *client_addr,
                            socklen_t *addrLen) {
+    long startTime = getCurrentTime();
     receiveUDSFile(data, server_fd, datagram, client_addr, addrLen);
     long endTime = getCurrentTime();
     char endTimeStr[200];
     snprintf(endTimeStr, sizeof(endTimeStr), "endTime %ld\n", endTime);
     if (datagram) {
-        if (sendto(server_fd, endTimeStr, sizeof(endTimeStr), 0, NULL, 0) == -1) {
-            perror("sendto");
-            exit(1);
-        }
+        long elapsedTime = endTime - startTime;
+        snprintf(endTimeStr, sizeof(endTimeStr), "uds_dgram,%ld", elapsedTime);
+        send(data->socket, endTimeStr, sizeof(endTimeStr), 0);
+
+//        if (sendto(server_fd, endTimeStr, sizeof(endTimeStr), 0, NULL, 0) == -1) {
+//            perror("sendto");
+//            exit(1);
+//        }
     } else {
         if (send(server_fd, endTimeStr, sizeof(endTimeStr), 0) == -1) {
             perror("send");

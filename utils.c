@@ -150,17 +150,3 @@ void setTimeout(int socket, int time) {
         exit(1);
     }
 }
-
-/**
- * check if a string contains space
- * @param str to check
- * @return true/false
- */
-bool stringContainsSpace(const char *str) {
-    for (int i = 0; str[i] != '\0' || str[i] != '\n'; i++) {
-        if (str[i] == ' ') {
-            return true;
-        }
-    }
-    return false;
-}

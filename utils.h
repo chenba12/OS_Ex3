@@ -34,6 +34,5 @@ bool verifyChecksum(const char *filePath, const unsigned char *receivedChecksum)
 
 void setTimeout(int socket, int time);
 
-bool stringContainsSpace(const char *str);
 
 #endif

@@ -278,14 +278,15 @@ startChat(int socket, long port, bool clientOrServer, bool testMode, char *testT
             } else if (bytesRead == 0) {
                 if (!quiteMode)printf("Connection closed by remote host\n");
                 return;
-//                exit(0);
             } else if (bytesRead > 0) {
                 recvBuffer[bytesRead] = '\0';
                 if (strcmp(recvBuffer, "true") == 0) {
                     quiteMode = true;
                 }
                 if (!quiteMode || strchr(recvBuffer, ',')) {
-                    printf("%s\n", recvBuffer);
+                    if (!strchr(recvBuffer, ','))
+                        printf("received message %s\n", recvBuffer);
+                    else printf("%s\n", recvBuffer);
                 }
                 // if the client got a ready message from the client it can
                 // launch its own thread that handle the communication in -p mode
@@ -384,7 +385,7 @@ int checkConnection(char *testType, char *testParam) {
             result = 4;
         }
     } else if (strcmp(testType, "uds") == 0) {
-        if (strcmp(testParam, "dgram") == 0) {
+        if (strcmp(testParam, "dgram\n") == 0 || strcmp(testParam, "dgram") == 0) {
             result = 5;
         } else if (strcmp(testParam, "stream\n") == 0 || strcmp(testParam, "stream") == 0) {
             result = 6;
